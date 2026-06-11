@@ -1,0 +1,65 @@
+# =========================
+# 前端相关 (React / Vite / Node)
+# =========================
+node_modules/
+dist/
+dist-ssr/
+build/
+*.local
+.env.local
+.env.*.local
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# =========================
+# 后端相关 (Java / Spring Boot / Maven)
+# =========================
+target/
+*.class
+*.jar
+*.war
+*.ear
+*.nar
+*.zip
+*.tar.gz
+*.rar
+pom.xml.tag
+pom.xml.releaseBackup
+pom.xml.versionsBackup
+pom.xml.next
+release.properties
+dependency-reduced-pom.xml
+buildNumber.properties
+.mvn/timing.properties
+.mvn/wrapper/maven-wrapper.jar
+
+# =========================
+# 日志文件
+# =========================
+logs/
+*.log
+
+# =========================
+# 开发工具及系统文件
+# =========================
+.idea/
+.vscode/
+.cursor/
+*.swp
+*.swa
+*~
+.DS_Store
+Thumbs.db
+
+# =========================
+# Cursor/Agent 特定忽略
+# =========================
+terminals/
+agent-transcripts/
+
+# =========================
+# 环境变量及敏感信息
+# =========================
+.env

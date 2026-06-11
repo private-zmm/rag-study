@@ -1,0 +1,42 @@
+server:
+  port: 8080
+
+spring:
+  application:
+    name: rag-study-backend
+  servlet:
+    multipart:
+      max-file-size: 50MB
+      max-request-size: 60MB
+  datasource:
+    url: jdbc:postgresql://${DB_HOST:192.168.0.198}:${DB_PORT:15432}/${DB_NAME:rag-study}
+    username: ${DB_USERNAME:postgres}
+    password: ${DB_PASSWORD:admin=123}
+  jpa:
+    hibernate:
+      ddl-auto: update
+    open-in-view: false
+    properties:
+      hibernate:
+        format_sql: true
+
+rag-study:
+  storage:
+    minio:
+      endpoint: ${MINIO_ENDPOINT:http://192.168.0.198:19000}
+      bucket: ${MINIO_BUCKET:rag-study}
+      access-key: ${MINIO_ACCESS_KEY:minioadmin}
+      secret-key: ${MINIO_SECRET_KEY:minioadmin}
+  vector:
+    qdrant:
+      url: ${QDRANT_URL:http://192.168.0.198:16333}
+      collection: ${QDRANT_COLLECTION:rag_study_chunks_text_embedding_v4}
+      vector-size: ${QDRANT_VECTOR_SIZE:1024}
+      grpc-port: ${QDRANT_GRPC_PORT:}
+      api-key: ${QDRANT_API_KEY:}
+  ai:
+    base-url: ${AI_BASE_URL:}
+    api-key: ${AI_API_KEY:}
+    model: ${AI_MODEL:gpt-4o-mini}
+    temperature: ${AI_TEMPERATURE:0.3}
+    system-prompt: ${AI_SYSTEM_PROMPT:你是一个面向学习、笔记和知识库整理的中文助手。回答要清晰、准确、简洁。如果有markdown文档回答要是标准格式。}
