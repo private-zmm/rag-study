@@ -1,0 +1,285 @@
+.clipper-page {
+  height: 100dvh;
+  min-height: 0;
+  overflow: hidden;
+  background: #ffffff;
+}
+
+.clipper-workspace {
+  display: grid;
+  grid-template-columns: minmax(260px, 300px) minmax(340px, 420px) minmax(520px, 1fr);
+  gap: 26px;
+  max-width: none;
+  height: 100dvh;
+  min-height: 0;
+  overflow: hidden;
+  margin: 0;
+  padding: 36px 28px 22px 12px;
+}
+
+.clipper-history-panel,
+.clipper-control-panel,
+.clipper-preview-panel {
+  min-width: 0;
+}
+
+.clipper-history-panel {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  gap: 12px;
+  height: 100%;
+  min-height: 0;
+  overflow: hidden;
+  border-right: 1px solid #eef0f4;
+  padding-right: 18px;
+}
+
+.clipper-control-panel {
+  display: grid;
+  align-content: start;
+  gap: 22px;
+  min-height: 0;
+  overflow: auto;
+}
+
+.clipper-hero {
+  display: grid;
+  gap: 4px;
+  justify-items: start;
+  margin-bottom: 0;
+  text-align: left;
+}
+
+.clipper-hero .ant-typography {
+  margin: 0;
+}
+
+.clipper-preview-panel {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  gap: 18px;
+  height: 100%;
+  min-height: 0;
+  overflow: hidden;
+  border-left: 1px solid #eef0f4;
+  padding-left: 26px;
+}
+
+.clipper-preview-header {
+  display: grid;
+  gap: 6px;
+}
+
+.clipper-preview-header .ant-typography {
+  margin: 0;
+}
+
+.clipper-editor-form {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  gap: 8px;
+  min-height: 0;
+}
+
+.clipper-rendered-preview {
+  min-height: 0;
+  height: 100%;
+  overflow: auto;
+  border: 1px solid #eef0f4;
+  border-radius: 8px;
+  background: #ffffff;
+  padding: 22px 24px;
+}
+
+.clipper-rendered-preview .markdown-message {
+  max-width: 860px;
+  color: #202124;
+  font-size: 15px;
+  line-height: 1.78;
+}
+
+.clipper-rendered-preview .markdown-message h1,
+.clipper-rendered-preview .markdown-message h2,
+.clipper-rendered-preview .markdown-message h3 {
+  color: #171a1f;
+}
+
+.clipper-form {
+  display: grid;
+  gap: 16px;
+  width: min(640px, calc(100vw - 320px));
+}
+
+.clipper-control-panel .clipper-form {
+  width: 100%;
+}
+
+.clipper-url-input {
+  height: 46px;
+  border-radius: 999px;
+  box-shadow: 0 12px 36px rgb(15 23 42 / 0.06);
+}
+
+.clipper-mode-group {
+  display: grid;
+  gap: 8px;
+}
+
+.clipper-meta {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+  border: 1px solid #eef0f4;
+  border-radius: 8px;
+  padding: 10px;
+}
+
+.clipper-meta .ant-statistic-title {
+  margin-bottom: 2px;
+  color: #6b7280;
+  font-size: 12px;
+}
+
+.clipper-meta .ant-statistic-content {
+  overflow: hidden;
+  color: #202124;
+  font-size: 15px;
+  font-weight: 650;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.clipper-history-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.clipper-history-groups {
+  min-height: 0;
+  overflow: auto;
+}
+
+.clipper-history-group-title {
+  margin: 12px 0 4px;
+  color: #8c8c8c;
+  font-size: 12px;
+}
+
+.clipper-history-list {
+  display: grid;
+  gap: 4px;
+}
+
+.clipper-history-item {
+  min-width: 0;
+  border-radius: 8px;
+  cursor: pointer;
+  padding: 8px !important;
+}
+
+.clipper-history-item:hover,
+.clipper-history-item.active {
+  background: #f5f7fb;
+}
+
+.clipper-history-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 24px;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  min-width: 0;
+}
+
+.clipper-history-content {
+  display: grid;
+  min-width: 0;
+  gap: 3px;
+}
+
+.clipper-history-title,
+.clipper-history-url {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.clipper-history-title {
+  display: block;
+  min-width: 0;
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.clipper-history-url {
+  display: block;
+  font-size: 12px;
+}
+
+.clipper-history-delete {
+  width: 22px;
+  height: 22px;
+  opacity: 0;
+  transition:
+    background 160ms ease,
+    color 160ms ease,
+    opacity 160ms ease;
+}
+
+.clipper-history-item:hover .clipper-history-delete,
+.clipper-history-item:focus-within .clipper-history-delete {
+  opacity: 1;
+}
+
+@media (max-width: 1320px) {
+  .clipper-workspace {
+    grid-template-columns: minmax(220px, 260px) minmax(300px, 360px) minmax(360px, 1fr);
+    gap: 18px;
+  }
+
+  .clipper-preview-panel {
+    height: 100%;
+    min-height: 0;
+    border-left: 1px solid #eef0f4;
+    border-top: 0;
+    padding-top: 0;
+    padding-left: 18px;
+  }
+}
+
+@media (max-width: 900px) {
+  .clipper-form {
+    width: calc(100vw - 32px);
+  }
+
+  .clipper-workspace {
+    grid-template-columns: 1fr;
+    grid-template-rows: minmax(180px, 24dvh) auto minmax(0, 1fr);
+    height: 100dvh;
+    min-height: 0;
+    overflow: hidden;
+    padding: 32px 16px 18px;
+  }
+
+  .clipper-history-panel {
+    height: 100%;
+    min-height: 0;
+    overflow: hidden;
+    border-right: 0;
+    border-bottom: 1px solid #eef0f4;
+    padding-right: 0;
+    padding-bottom: 16px;
+  }
+
+  .clipper-preview-panel {
+    height: 100%;
+    min-height: 0;
+    overflow: hidden;
+    border-left: 0;
+    border-top: 1px solid #eef0f4;
+    padding-top: 16px;
+    padding-left: 0;
+  }
+}

@@ -32,10 +32,11 @@ import {
   renameNote,
   saveNote,
   syncNotesToKnowledge,
-} from '../api/client';
-import { NoteImportControls, type NoteImportControlsHandle } from '../components/NoteImportControls';
-import { useApiResource } from '../hooks/useApiResource';
-import type { KnowledgeBase, Note, NoteFolder } from '../types';
+} from '../../api/client';
+import { NoteImportControls, type NoteImportControlsHandle } from '../../components/NoteImportControls';
+import { useApiResource } from '../../hooks/useApiResource';
+import type { KnowledgeBase, Note, NoteFolder } from '../../types';
+import './NotesPage.css';
 
 const editorToolbar = [
   'headings',

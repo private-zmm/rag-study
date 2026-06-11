@@ -1,9 +1,10 @@
 import { Alert, Button, Empty, Form, Input, List, Modal, Radio, Select, Space, Statistic, Tooltip, Typography, message } from 'antd';
 import { Clock3, FileText, Globe, Save, Trash2, WandSparkles } from 'lucide-react';
 import { Fragment, useEffect, useMemo, useState } from 'react';
-import { deleteWebClipHistory, fetchKnowledgeBases, fetchWebClipHistory, fetchWebClipHistoryItem, previewClipper, submitClipper } from '../api/client';
-import MarkdownMessage from '../components/MarkdownMessage';
-import type { ClipperPreview, ClipperResult, KnowledgeBase, WebClip } from '../types';
+import { deleteWebClipHistory, fetchKnowledgeBases, fetchWebClipHistory, fetchWebClipHistoryItem, previewClipper, submitClipper } from '../../api/client';
+import MarkdownMessage from '../../components/MarkdownMessage';
+import type { ClipperPreview, ClipperResult, KnowledgeBase, WebClip } from '../../types';
+import './ClipperPage.css';
 
 function ClipperPage() {
   const [url, setUrl] = useState('');

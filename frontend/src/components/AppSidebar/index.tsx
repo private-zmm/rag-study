@@ -7,9 +7,10 @@ import {
   deleteChatConversation,
   fetchChatConversations,
   renameChatConversation,
-} from '../api/client';
-import { navItems } from '../data/mockData';
-import type { ChatConversation, PageKey, User } from '../types';
+} from '../../api/client';
+import { navItems } from '../../data/mockData';
+import type { ChatConversation, PageKey, User } from '../../types';
+import styles from './AppSidebar.module.css';
 
 type AppSidebarProps = {
   activePage: PageKey;
@@ -138,11 +139,11 @@ function AppSidebar({
   };
 
   const renderConversationLabel = (conversation: ChatConversation, showTime = false) => (
-    <span className={showTime ? 'conversation-row with-time' : 'conversation-row'} onClick={(event) => event.stopPropagation()}>
+    <span className={showTime ? `${styles.conversationRow} ${styles.withTime}` : styles.conversationRow} onClick={(event) => event.stopPropagation()}>
       {editingConversationId === conversation.id ? (
         <Input
           autoFocus
-          className="conversation-rename-input"
+          className={styles.conversationRenameInput}
           value={draftTitle}
           variant="borderless"
           onBlur={() => void finishRename(conversation)}
@@ -161,11 +162,11 @@ function AppSidebar({
           }}
         />
       ) : (
-        <button className="conversation-title-button" type="button" onClick={() => onConversationSelect(conversation.id)}>
+        <button className={styles.conversationTitleButton} type="button" onClick={() => onConversationSelect(conversation.id)}>
           {conversation.title}
         </button>
       )}
-      {showTime ? <span className="conversation-relative-time">{formatRelativeConversationTime(conversation.updatedAt)}</span> : null}
+      {showTime ? <span className={styles.conversationRelativeTime}>{formatRelativeConversationTime(conversation.updatedAt)}</span> : null}
       <Dropdown
         menu={{
           items: getConversationMenuItems(conversation),
@@ -179,7 +180,7 @@ function AppSidebar({
         trigger={['click']}
       >
         <Button
-          className="conversation-more-button"
+          className={styles.conversationMoreButton}
           type="text"
           shape="circle"
           icon={<Ellipsis size={16} />}
@@ -192,17 +193,17 @@ function AppSidebar({
   );
 
   return (
-    <Layout.Sider className="app-sidebar" width={232}>
-      <div className="sidebar-brand">
-        <span className="brand-badge">R</span>
+    <Layout.Sider className={styles.appSidebar} width={232}>
+      <div className={styles.sidebarBrand}>
+        <span className={styles.brandBadge}>R</span>
         <Typography.Text strong>RAG Study</Typography.Text>
-        <Button className="sidebar-icon-button" type="text" icon={<PanelLeftClose size={17} />} />
+        <Button className={styles.sidebarIconButton} type="text" icon={<PanelLeftClose size={17} />} />
       </div>
 
-      <nav className="app-nav" aria-label="主导航">
+      <nav className={styles.appNav} aria-label="主导航">
         {navItems.map((item) => (
           <button
-            className={activePage === item.key ? 'active' : ''}
+            className={activePage === item.key ? styles.active : ''}
             key={item.key}
             type="button"
             onClick={() => onPageChange(item.key)}
@@ -213,19 +214,19 @@ function AppSidebar({
         ))}
       </nav>
 
-      <Divider className="sidebar-divider" />
+      <Divider className={styles.sidebarDivider} />
 
-      <div className="sidebar-conversation-groups">
+      <div className={styles.sidebarConversationGroups}>
         {groupedConversations.map((group) => (
           <Fragment key={group.label}>
-            <div className="sidebar-section-title conversation-time-group-title">{group.label}</div>
-            <div className="sidebar-conversation-group">
+            <div className={`${styles.sidebarSectionTitle} ${styles.conversationTimeGroupTitle}`}>{group.label}</div>
+            <div className={styles.sidebarConversationGroup}>
               {group.items.map((conversation) => (
                 <button
                   className={
                     selectedConversationId === conversation.id
-                      ? 'sidebar-conversation-item active'
-                      : 'sidebar-conversation-item'
+                      ? `${styles.sidebarConversationItem} ${styles.active}`
+                      : styles.sidebarConversationItem
                   }
                   key={conversation.id}
                   type="button"
@@ -257,7 +258,7 @@ function AppSidebar({
         }}
         trigger={['click']}
       >
-        <button className="sidebar-user" type="button">
+        <button className={styles.sidebarUser} type="button">
           <Avatar style={{ background: '#1677ff' }}>{avatarText}</Avatar>
           <div>
             <Typography.Text>{displayName}</Typography.Text>

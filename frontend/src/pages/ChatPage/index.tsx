@@ -23,11 +23,12 @@ import {
   fetchNoteFolders,
   fetchNotes,
   streamChatMessage,
-} from '../api/client';
-import MarkdownMessage from '../components/MarkdownMessage';
-import VditorPreviewMessage from '../components/VditorPreviewMessage';
-import { useApiResource } from '../hooks/useApiResource';
-import type { ChatConversation, ChatMessage, ChatModelConfig, ChatReference, KnowledgeBase, Note, NoteFolder } from '../types';
+} from '../../api/client';
+import MarkdownMessage from '../../components/MarkdownMessage';
+import VditorPreviewMessage from '../../components/VditorPreviewMessage';
+import { useApiResource } from '../../hooks/useApiResource';
+import type { ChatConversation, ChatMessage, ChatModelConfig, ChatReference, KnowledgeBase, Note, NoteFolder } from '../../types';
+import './ChatPage.css';
 
 const referenceActions = [
   { key: 'file', label: '上传文件', icon: Paperclip },

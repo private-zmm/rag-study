@@ -1,13 +1,14 @@
 import { Layout } from 'antd';
 import { useState } from 'react';
-import AppSidebar from '../components/AppSidebar';
-import ChatPage from '../pages/ChatPage';
-import ClipperPage from '../pages/ClipperPage';
-import KnowledgePage from '../pages/KnowledgePage';
-import NotesPage from '../pages/NotesPage';
-import SearchPage from '../pages/SearchPage';
-import SettingsPage from '../pages/SettingsPage';
-import type { PageKey, User } from '../types';
+import AppSidebar from '../../components/AppSidebar';
+import ChatPage from '../../pages/ChatPage';
+import ClipperPage from '../../pages/ClipperPage';
+import KnowledgePage from '../../pages/KnowledgePage';
+import NotesPage from '../../pages/NotesPage';
+import SearchPage from '../../pages/SearchPage';
+import SettingsPage from '../../pages/SettingsPage';
+import type { PageKey, User } from '../../types';
+import styles from './AppLayout.module.css';
 
 type AppLayoutProps = {
   activePage: PageKey;
@@ -101,7 +102,7 @@ function AppLayout({ activePage, onLogout, onPageChange, user }: AppLayoutProps)
   };
 
   return (
-    <Layout className="app-shell">
+    <Layout className={styles.appShell}>
       <AppSidebar
         activePage={activePage}
         conversationRefreshVersion={conversationRefreshVersion}
@@ -113,7 +114,7 @@ function AppLayout({ activePage, onLogout, onPageChange, user }: AppLayoutProps)
         selectedConversationId={selectedConversationId}
         user={user}
       />
-      <Layout.Content className="app-content">{pageMap[activePage]}</Layout.Content>
+      <Layout.Content className={styles.appContent}>{pageMap[activePage]}</Layout.Content>
     </Layout>
   );
 }

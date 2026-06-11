@@ -1,8 +1,9 @@
 import { Empty, Input, List, Segmented, Space, Tag, Typography, message } from 'antd';
 import { Database, FileText, MessageCircle, Search } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
-import { searchGlobal } from '../api/client';
-import type { GlobalSearchResult } from '../types';
+import { searchGlobal } from '../../api/client';
+import type { GlobalSearchResult } from '../../types';
+import './SearchPage.css';
 
 type SearchPageProps = {
   onConversationSelect: (conversationId: string) => void;

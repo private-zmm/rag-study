@@ -21,8 +21,9 @@ import {
   testBackupConfig,
   updateEmbeddingModelConfig,
   updateChatModelConfig,
-} from '../api/client';
-import type { BackupConfig, BackupItem, ChatConversation, ChatModelConfig, EmbeddingModelConfig } from '../types';
+} from '../../api/client';
+import type { BackupConfig, BackupItem, ChatConversation, ChatModelConfig, EmbeddingModelConfig } from '../../types';
+import './SettingsPage.css';
 
 type SettingsFormValues = {
   name: string;

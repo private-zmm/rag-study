@@ -14,9 +14,10 @@ import {
   updateKnowledgeBase,
   updateKnowledgeDocument,
   uploadKnowledgeDocument,
-} from '../api/client';
+} from '../../api/client';
 import { useEffect, useState } from 'react';
-import type { KnowledgeBase, KnowledgeDocument } from '../types';
+import type { KnowledgeBase, KnowledgeDocument } from '../../types';
+import './KnowledgePage.css';
 
 const statusMap: Record<KnowledgeBase['vectorStatus'], { text: string; status: 'success' | 'processing' | 'default' }> = {
   ready: { text: '已完成', status: 'success' },

@@ -1,9 +1,10 @@
 import { Button, Form, Input, Segmented, Typography, message } from 'antd';
 import { Lock, Mail, UserRound } from 'lucide-react';
 import { useState } from 'react';
-import { login, register } from '../api/client';
-import { storeSession } from '../auth/session';
-import type { AuthSession } from '../types';
+import { login, register } from '../../api/client';
+import { storeSession } from '../../auth/session';
+import type { AuthSession } from '../../types';
+import styles from './AuthPage.module.css';
 
 type AuthPageProps = {
   onAuthenticated: (session: AuthSession) => void;
@@ -40,10 +41,10 @@ function AuthPage({ onAuthenticated }: AuthPageProps) {
   };
 
   return (
-    <main className="auth-page">
-      <section className="auth-panel">
-        <div className="auth-brand">
-          <span className="welcome-logo">R</span>
+    <main className={styles.authPage}>
+      <section className={styles.authPanel}>
+        <div className={styles.authBrand}>
+          <span className={styles.welcomeLogo}>R</span>
           <div>
             <Typography.Title level={2}>RAG Study</Typography.Title>
             <Typography.Text type="secondary">登录后开始管理你的笔记、知识库和对话。</Typography.Text>
@@ -60,7 +61,7 @@ function AuthPage({ onAuthenticated }: AuthPageProps) {
           ]}
         />
 
-        <Form className="auth-form" layout="vertical" onFinish={handleSubmit}>
+        <Form className={styles.authForm} layout="vertical" onFinish={handleSubmit}>
           {mode === 'login' ? (
             <Form.Item name="account" rules={[{ required: true, message: '请输入用户名或邮箱' }]}>
               <Input prefix={<UserRound size={16} />} placeholder="用户名或邮箱" />

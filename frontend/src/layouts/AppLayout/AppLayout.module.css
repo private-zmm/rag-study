@@ -1,0 +1,20 @@
+.appShell {
+  height: 100dvh;
+  overflow: hidden;
+}
+
+.appContent {
+  min-width: 0;
+  height: 100dvh;
+  min-height: 0;
+  overflow: hidden;
+  background: #ffffff;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.appContent::-webkit-scrollbar {
+  display: none;
+  width: 0;
+  height: 0;
+}
