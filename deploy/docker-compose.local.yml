@@ -1,0 +1,29 @@
+services:
+  backend:
+    depends_on: []
+    environment:
+      DB_HOST: yudao-pg
+      DB_PORT: 5432
+      DB_NAME: rag-study
+      DB_USERNAME: postgres
+      DB_PASSWORD: admin=123
+      MINIO_ENDPOINT: http://minio:9000
+      MINIO_BUCKET: rag-study
+      MINIO_ACCESS_KEY: minioadmin
+      MINIO_SECRET_KEY: minioadmin
+      QDRANT_URL: http://qdrant:6333
+      QDRANT_COLLECTION: rag_study_chunks_text_embedding_v4
+      QDRANT_VECTOR_SIZE: 1024
+    networks:
+      code_default:
+        aliases:
+          - backend
+
+  frontend:
+    depends_on: []
+    networks:
+      code_default:
+
+networks:
+  code_default:
+    external: true

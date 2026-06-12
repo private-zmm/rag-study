@@ -335,7 +335,7 @@ public class BackupService {
 
             unzip(backupZip, extractDirectory);
             restoreDatabase(config, extractDirectory.resolve("database.sql"));
-            restoreObjects(extractDirectory.resolve("objects"), client);
+            restoreObjects(extractDirectory.resolve("objects"));
         } catch (Exception exception) {
             throw new IllegalStateException("恢复备份失败", exception);
         } finally {
@@ -425,7 +425,7 @@ public class BackupService {
         }
     }
 
-    private void restoreObjects(Path objectsDirectory, MinioClient ignoredBackupClient) throws Exception {
+    private void restoreObjects(Path objectsDirectory) throws Exception {
         if (!Files.exists(objectsDirectory) || !StringUtils.hasText(minioStorageProperties.getBucket())) {
             return;
         }
@@ -587,6 +587,13 @@ public class BackupService {
             throw new IllegalStateException("S3 备份配置不完整");
         }
 
+        return config;
+    }
+
+    private BackupConfigEntity createDefaultRestoreConfig() {
+        BackupConfigEntity config = new BackupConfigEntity();
+        config.setPgDumpPath("pg_dump");
+        config.setPsqlPath("psql");
         return config;
     }
 
