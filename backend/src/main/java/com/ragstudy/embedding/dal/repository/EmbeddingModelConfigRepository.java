@@ -11,4 +11,6 @@ public interface EmbeddingModelConfigRepository extends JpaRepository<EmbeddingM
     List<EmbeddingModelConfigEntity> findAllByUserIdOrderByDefaultModelDescUpdatedAtDesc(String userId);
 
     Optional<EmbeddingModelConfigEntity> findFirstByUserIdAndDefaultModelTrue(String userId);
+
+    Optional<EmbeddingModelConfigEntity> findByIdAndUserId(String id, String userId);
 }

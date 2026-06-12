@@ -25,8 +25,8 @@ function AppLayout({ activePage, onLogout, onPageChange, user }: AppLayoutProps)
   const [selectedKnowledgeBaseId, setSelectedKnowledgeBaseId] = useState<string>();
   const [selectedKnowledgeDocumentId, setSelectedKnowledgeDocumentId] = useState<string>();
 
-  const handlePageChange = (page: PageKey) => {
-    if (page === 'chat') {
+  const handlePageChange = (page: PageKey, options?: { newChat?: boolean }) => {
+    if (page === 'chat' && options?.newChat) {
       setSelectedConversationId(undefined);
       setNewChatVersion((version) => version + 1);
     }

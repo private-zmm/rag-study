@@ -93,6 +93,11 @@ public class MinioStorageService {
         }
     }
 
+    public String bucketName() {
+        ensureConfigured();
+        return properties.getBucket();
+    }
+
     private void ensureConfigured() {
         if (!StringUtils.hasText(properties.getBucket())) {
             throw new IllegalStateException("MinIO bucket 未配置");

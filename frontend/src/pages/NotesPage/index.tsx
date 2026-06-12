@@ -26,6 +26,7 @@ import {
   createNoteFolder,
   deleteNote,
   deleteNoteFolder,
+  fetchNoteKnowledgeSyncTask,
   fetchKnowledgeBases,
   fetchNoteFolders,
   fetchNotes,
@@ -64,6 +65,7 @@ const editorToolbar = [
 ];
 
 const noteFeedbackMessageKey = 'note-feedback';
+const noteKnowledgeSyncMessageKey = 'note-knowledge-sync';
 const emptyNotes: Note[] = [];
 const emptyFolders: NoteFolder[] = [];
 const emptyKnowledgeBases: KnowledgeBase[] = [];
@@ -455,17 +457,49 @@ function NotesPage({ selectedNoteId }: NotesPageProps) {
     setSyncingKnowledge(true);
 
     try {
-      const result = await syncNotesToKnowledge({
+      const task = await syncNotesToKnowledge({
         knowledgeBaseId,
         noteIds: targetNotes.map((note) => note.id),
       });
-
-      message.success(`已同步 ${result.syncedNotes} 篇笔记，向量化 ${result.indexedChunks} 个分块`);
-    } catch {
-      message.error('同步到知识库失败，请检查知识库和向量服务配置');
+      await pollKnowledgeSyncTask(task.taskId);
+    } catch (error) {
+      message.error({
+        content: error instanceof Error ? error.message : '同步到知识库失败，请检查知识库和向量服务配置',
+        key: noteKnowledgeSyncMessageKey,
+      });
     } finally {
       setSyncingKnowledge(false);
     }
+  };
+
+  const pollKnowledgeSyncTask = async (taskId: string) => {
+    let latestTask = await fetchNoteKnowledgeSyncTask(taskId);
+
+    while (latestTask.status === 'pending' || latestTask.status === 'running') {
+      message.loading({
+        content: `正在同步 ${latestTask.processedNotes}/${latestTask.totalNotes} 篇，已向量化 ${latestTask.indexedChunks} 个分块`,
+        duration: 0,
+        key: noteKnowledgeSyncMessageKey,
+      });
+
+      await wait(1200);
+      latestTask = await fetchNoteKnowledgeSyncTask(taskId);
+    }
+
+    if (latestTask.status === 'completed') {
+      message.success({
+        content: `同步完成：更新 ${latestTask.syncedNotes} 篇，跳过 ${latestTask.skippedNotes} 篇，向量化 ${latestTask.indexedChunks} 个分块`,
+        duration: 4,
+        key: noteKnowledgeSyncMessageKey,
+      });
+      return;
+    }
+
+    message.error({
+      content: latestTask.errorMessage || '同步到知识库失败，请检查知识库和向量服务配置',
+      duration: 5,
+      key: noteKnowledgeSyncMessageKey,
+    });
   };
 
   const deleteNotesByIds = async (noteIds: string[], successMessage: string) => {
@@ -1039,6 +1073,12 @@ function collectNotesFromTree(nodes: NoteTreeNode[]) {
   });
 
   return collectedNotes;
+}
+
+function wait(duration: number) {
+  return new Promise((resolve) => {
+    window.setTimeout(resolve, duration);
+  });
 }
 
 export default NotesPage;

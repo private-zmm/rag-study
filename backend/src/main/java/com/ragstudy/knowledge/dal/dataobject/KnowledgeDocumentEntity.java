@@ -49,6 +49,9 @@ public class KnowledgeDocumentEntity {
     @Column(nullable = false)
     private String vectorStatus;
 
+    @Column(length = 64)
+    private String contentHash;
+
     @Column(nullable = false)
     private LocalDateTime createdAt;
 
@@ -138,6 +141,10 @@ public class KnowledgeDocumentEntity {
         return vectorStatus;
     }
 
+    public String getContentHash() {
+        return contentHash;
+    }
+
     public LocalDateTime getUpdatedAt() {
         return updatedAt;
     }
@@ -148,6 +155,10 @@ public class KnowledgeDocumentEntity {
         this.parseStatus = "parsed";
         this.vectorStatus = "pending";
         this.updatedAt = LocalDateTime.now();
+    }
+
+    public void setContentHash(String contentHash) {
+        this.contentHash = contentHash;
     }
 
     public void setVectorStatus(String vectorStatus) {

@@ -13,6 +13,7 @@ import dev.langchain4j.store.embedding.filter.Filter;
 import dev.langchain4j.store.embedding.filter.comparison.IsEqualTo;
 import dev.langchain4j.store.embedding.filter.logical.And;
 import dev.langchain4j.store.embedding.qdrant.QdrantEmbeddingStore;
+import jakarta.annotation.PreDestroy;
 import org.springframework.http.HttpStatusCode;
 import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
@@ -31,6 +32,7 @@ public class QdrantVectorService {
     private final QdrantVectorProperties properties;
     private final EmbeddingProviderService embeddingProviderService;
     private final RestClient restClient;
+    private volatile QdrantEmbeddingStore embeddingStore;
 
     public QdrantVectorService(
             QdrantVectorProperties properties,
@@ -40,6 +42,16 @@ public class QdrantVectorService {
         this.properties = properties;
         this.embeddingProviderService = embeddingProviderService;
         this.restClient = restClientBuilder.build();
+    }
+
+    @PreDestroy
+    public void closeEmbeddingStore() {
+        QdrantEmbeddingStore currentStore = embeddingStore;
+
+        if (currentStore != null) {
+            currentStore.close();
+            embeddingStore = null;
+        }
     }
 
     public void ensureCollection() {
@@ -79,7 +91,7 @@ public class QdrantVectorService {
     public UpsertResult upsertChunkWithModel(KnowledgeDocumentChunkEntity chunk) {
         ensureCollection();
         EmbeddingProviderService.EmbeddingVector embeddingVector = embeddingProviderService.embed(chunk.getUserId(), chunk.getContent());
-        String vectorId = embeddingStore().add(
+        String vectorId = getEmbeddingStore().add(
                 Embedding.from(embeddingVector.vector()),
                 TextSegment.from(chunk.getContent(), chunkMetadata(chunk))
         );
@@ -95,7 +107,7 @@ public class QdrantVectorService {
                 .maxResults(limit)
                 .filter(ownedKnowledgeBaseFilter(userId, knowledgeBaseId))
                 .build();
-        EmbeddingSearchResult<TextSegment> searchResult = embeddingStore().search(searchRequest);
+        EmbeddingSearchResult<TextSegment> searchResult = getEmbeddingStore().search(searchRequest);
         List<VectorSearchResult> results = new ArrayList<>();
 
         for (EmbeddingMatch<TextSegment> match : searchResult.matches()) {
@@ -117,7 +129,32 @@ public class QdrantVectorService {
         return results;
     }
 
-    private EmbeddingStore<TextSegment> embeddingStore() {
+    public void deleteDocumentVectors(String userId, String knowledgeBaseId, String documentId) {
+        ensureCollection();
+        getEmbeddingStore().removeAll(new And(
+                ownedKnowledgeBaseFilter(userId, knowledgeBaseId),
+                new IsEqualTo("documentId", documentId)
+        ));
+    }
+
+    private EmbeddingStore<TextSegment> getEmbeddingStore() {
+        QdrantEmbeddingStore currentStore = embeddingStore;
+
+        if (currentStore == null) {
+            synchronized (this) {
+                currentStore = embeddingStore;
+
+                if (currentStore == null) {
+                    currentStore = createEmbeddingStore();
+                    embeddingStore = currentStore;
+                }
+            }
+        }
+
+        return currentStore;
+    }
+
+    private QdrantEmbeddingStore createEmbeddingStore() {
         QdrantConnection connection = resolveQdrantConnection();
         QdrantEmbeddingStore.Builder builder = QdrantEmbeddingStore.builder()
                 .collectionName(properties.getCollection())

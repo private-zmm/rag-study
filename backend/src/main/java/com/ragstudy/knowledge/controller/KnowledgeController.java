@@ -6,6 +6,7 @@ import com.ragstudy.common.ApiResponse;
 import com.ragstudy.common.PageResult;
 import com.ragstudy.knowledge.controller.dto.KnowledgeBaseDto;
 import com.ragstudy.knowledge.controller.dto.KnowledgeBaseRequest;
+import com.ragstudy.knowledge.controller.dto.KnowledgeDocumentBatchDeleteRequest;
 import com.ragstudy.knowledge.controller.dto.KnowledgeDocumentDto;
 import com.ragstudy.knowledge.controller.dto.KnowledgeDocumentRequest;
 import com.ragstudy.knowledge.controller.dto.KnowledgeIndexResultDto;
@@ -148,6 +149,17 @@ public class KnowledgeController {
     ) {
         UserEntity user = authService.requireUser(authorizationHeader);
         knowledgeDocumentService.deleteDocument(user.getId(), knowledgeBaseId, documentId);
+        return ApiResponse.ok(null);
+    }
+
+    @PostMapping("/{knowledgeBaseId}/documents/batch-delete")
+    public ApiResponse<Void> batchDeleteDocuments(
+            @RequestHeader(value = "Authorization", required = false) String authorizationHeader,
+            @PathVariable String knowledgeBaseId,
+            @Valid @RequestBody KnowledgeDocumentBatchDeleteRequest request
+    ) {
+        UserEntity user = authService.requireUser(authorizationHeader);
+        knowledgeDocumentService.deleteDocuments(user.getId(), knowledgeBaseId, request.documentIds());
         return ApiResponse.ok(null);
     }
 

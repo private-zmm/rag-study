@@ -57,6 +57,7 @@ public class KnowledgeVectorService {
         KnowledgeBaseEntity knowledgeBase = requireOwnedKnowledgeBase(userId, knowledgeBaseId);
         KnowledgeDocumentEntity document = requireOwnedDocument(userId, knowledgeBaseId, documentId);
         List<KnowledgeDocumentChunkEntity> chunks = chunkRepository.findAllByDocumentIdAndUserIdOrderByChunkIndexAsc(documentId, userId);
+        qdrantVectorService.deleteDocumentVectors(userId, knowledgeBaseId, documentId);
         String embeddingModel = rebuildChunks(chunks);
 
         document.setVectorStatus(chunks.isEmpty() ? "pending" : "ready");
@@ -105,25 +106,13 @@ public class KnowledgeVectorService {
     }
 
     private KnowledgeBaseEntity requireOwnedKnowledgeBase(String userId, String knowledgeBaseId) {
-        KnowledgeBaseEntity knowledgeBase = knowledgeBaseRepository.findById(knowledgeBaseId)
+        return knowledgeBaseRepository.findByIdAndUserId(knowledgeBaseId, userId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "知识库不存在"));
-
-        if (!knowledgeBase.getUserId().equals(userId)) {
-            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "知识库不存在");
-        }
-
-        return knowledgeBase;
     }
 
     private KnowledgeDocumentEntity requireOwnedDocument(String userId, String knowledgeBaseId, String documentId) {
-        KnowledgeDocumentEntity document = documentRepository.findById(documentId)
+        return documentRepository.findByIdAndKnowledgeBaseIdAndUserId(documentId, knowledgeBaseId, userId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "文档不存在"));
-
-        if (!document.getUserId().equals(userId) || !document.getKnowledgeBaseId().equals(knowledgeBaseId)) {
-            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "文档不存在");
-        }
-
-        return document;
     }
 
     private String rebuildChunks(List<KnowledgeDocumentChunkEntity> chunks) {

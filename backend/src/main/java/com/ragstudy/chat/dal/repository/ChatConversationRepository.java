@@ -7,10 +7,13 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
 import java.util.List;
+import java.util.Optional;
 
 public interface ChatConversationRepository extends JpaRepository<ChatConversationEntity, String> {
 
     List<ChatConversationEntity> findAllByUserIdAndArchivedOrderByUpdatedAtDesc(String userId, boolean archived);
+
+    Optional<ChatConversationEntity> findByIdAndUserId(String id, String userId);
 
     @Query("""
             select conversation from ChatConversationEntity conversation

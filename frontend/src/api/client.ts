@@ -1,5 +1,5 @@
 import { clearStoredSession, getStoredSession } from '../auth/session';
-import type { AuthSession, BackupConfig, BackupItem, BackupResult, ChatConversation, ChatMessage, ChatModelConfig, ClipperPreview, ClipperResult, EmbeddingModelConfig, GlobalSearchResult, KnowledgeBase, KnowledgeDocument, Note, NoteFolder, PageResult, User, WebClip } from '../types';
+import type { AuthSession, BackupConfig, BackupItem, BackupResult, ChatConversation, ChatMessage, ChatModelConfig, ClipperPreview, ClipperResult, EmbeddingModelConfig, GlobalSearchResult, KnowledgeBase, KnowledgeDocument, Note, NoteFolder, NoteKnowledgeSyncTask, PageResult, User, WebClip } from '../types';
 
 type ApiResponse<T> = {
   data: T;
@@ -105,13 +105,14 @@ export function importNotes(notes: Array<Pick<Note, 'title' | 'content'>>) {
 }
 
 export function syncNotesToKnowledge(payload: { knowledgeBaseId: string; noteIds: string[] }) {
-  return request<{ knowledgeBaseId: string; syncedNotes: number; indexedChunks: number; embeddingModel: string }>(
-    '/notes/sync-to-knowledge',
-    {
-      method: 'POST',
-      body: JSON.stringify(payload),
-    },
-  );
+  return request<NoteKnowledgeSyncTask>('/notes/sync-to-knowledge', {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  });
+}
+
+export function fetchNoteKnowledgeSyncTask(taskId: string) {
+  return request<NoteKnowledgeSyncTask>(`/notes/sync-to-knowledge/tasks/${taskId}`);
 }
 
 export function createNote(payload: Pick<Note, 'title' | 'content'>) {
@@ -207,6 +208,13 @@ export function updateKnowledgeDocument(
 export function deleteKnowledgeDocument(knowledgeBaseId: string, documentId: string) {
   return request<void>(`/knowledge-bases/${knowledgeBaseId}/documents/${documentId}`, {
     method: 'DELETE',
+  });
+}
+
+export function batchDeleteKnowledgeDocuments(knowledgeBaseId: string, documentIds: string[]) {
+  return request<void>(`/knowledge-bases/${knowledgeBaseId}/documents/batch-delete`, {
+    method: 'POST',
+    body: JSON.stringify({ documentIds }),
   });
 }
 

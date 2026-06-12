@@ -16,6 +16,8 @@ public interface KnowledgeDocumentRepository extends JpaRepository<KnowledgeDocu
 
     Page<KnowledgeDocumentEntity> findAllByKnowledgeBaseIdAndUserId(String knowledgeBaseId, String userId, Pageable pageable);
 
+    Optional<KnowledgeDocumentEntity> findByIdAndKnowledgeBaseIdAndUserId(String id, String knowledgeBaseId, String userId);
+
     @Query("""
             select document from KnowledgeDocumentEntity document
             where document.userId = :userId

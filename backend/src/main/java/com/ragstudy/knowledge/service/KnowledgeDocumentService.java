@@ -11,6 +11,7 @@ import com.ragstudy.knowledge.dal.repository.KnowledgeBaseRepository;
 import com.ragstudy.knowledge.dal.repository.KnowledgeDocumentChunkRepository;
 import com.ragstudy.knowledge.dal.repository.KnowledgeDocumentRepository;
 import com.ragstudy.knowledge.framework.MinioStorageService;
+import com.ragstudy.knowledge.framework.QdrantVectorService;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
@@ -37,17 +38,20 @@ public class KnowledgeDocumentService {
     private final KnowledgeDocumentRepository documentRepository;
     private final KnowledgeDocumentChunkRepository chunkRepository;
     private final MinioStorageService storageService;
+    private final QdrantVectorService qdrantVectorService;
 
     public KnowledgeDocumentService(
             KnowledgeBaseRepository knowledgeBaseRepository,
             KnowledgeDocumentRepository documentRepository,
             KnowledgeDocumentChunkRepository chunkRepository,
-            MinioStorageService storageService
+            MinioStorageService storageService,
+            QdrantVectorService qdrantVectorService
     ) {
         this.knowledgeBaseRepository = knowledgeBaseRepository;
         this.documentRepository = documentRepository;
         this.chunkRepository = chunkRepository;
         this.storageService = storageService;
+        this.qdrantVectorService = qdrantVectorService;
     }
 
     @Transactional(readOnly = true)
@@ -152,6 +156,28 @@ public class KnowledgeDocumentService {
         return savedDocument;
     }
 
+    @Transactional(readOnly = true)
+    public boolean isNoteDocumentContentUnchanged(String userId, String knowledgeBaseId, String noteId, String contentHash) {
+        return documentRepository
+                .findByKnowledgeBaseIdAndUserIdAndSourceTypeAndSourceId(knowledgeBaseId, userId, "note", noteId)
+                .map(document -> contentHash != null && contentHash.equals(document.getContentHash()))
+                .orElse(false);
+    }
+
+    @Transactional
+    public KnowledgeDocumentEntity syncNoteDocumentIfChanged(
+            String userId,
+            String knowledgeBaseId,
+            String noteId,
+            String title,
+            String rawContent,
+            String contentHash
+    ) {
+        KnowledgeDocumentEntity document = syncNoteDocument(userId, knowledgeBaseId, noteId, title, rawContent);
+        document.setContentHash(contentHash);
+        return documentRepository.save(document);
+    }
+
     @Transactional
     public KnowledgeDocumentDto saveWebDocument(String userId, String knowledgeBaseId, String url, String title, String rawContent) {
         KnowledgeBaseEntity knowledgeBase = requireOwnedKnowledgeBase(userId, knowledgeBaseId);
@@ -232,31 +258,52 @@ public class KnowledgeDocumentService {
     public void deleteDocument(String userId, String knowledgeBaseId, String documentId) {
         KnowledgeBaseEntity knowledgeBase = requireOwnedKnowledgeBase(userId, knowledgeBaseId);
         KnowledgeDocumentEntity document = requireOwnedDocument(userId, knowledgeBaseId, documentId);
+        deleteDocumentResources(document);
         chunkRepository.deleteAllByDocumentIdAndUserId(document.getId(), userId);
         documentRepository.delete(document);
         refreshKnowledgeBaseStats(knowledgeBase);
     }
 
-    private KnowledgeBaseEntity requireOwnedKnowledgeBase(String userId, String knowledgeBaseId) {
-        KnowledgeBaseEntity knowledgeBase = knowledgeBaseRepository.findById(knowledgeBaseId)
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "知识库不存在"));
+    @Transactional
+    public void deleteDocuments(String userId, String knowledgeBaseId, List<String> documentIds) {
+        KnowledgeBaseEntity knowledgeBase = requireOwnedKnowledgeBase(userId, knowledgeBaseId);
 
-        if (!knowledgeBase.getUserId().equals(userId)) {
-            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "知识库不存在");
+        for (String documentId : documentIds.stream().distinct().toList()) {
+            KnowledgeDocumentEntity document = requireOwnedDocument(userId, knowledgeBaseId, documentId);
+            deleteDocumentResources(document);
+            chunkRepository.deleteAllByDocumentIdAndUserId(document.getId(), userId);
+            documentRepository.delete(document);
         }
 
-        return knowledgeBase;
+        refreshKnowledgeBaseStats(knowledgeBase);
+    }
+
+    private KnowledgeBaseEntity requireOwnedKnowledgeBase(String userId, String knowledgeBaseId) {
+        return knowledgeBaseRepository.findByIdAndUserId(knowledgeBaseId, userId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "知识库不存在"));
     }
 
     private KnowledgeDocumentEntity requireOwnedDocument(String userId, String knowledgeBaseId, String documentId) {
-        KnowledgeDocumentEntity document = documentRepository.findById(documentId)
+        return documentRepository.findByIdAndKnowledgeBaseIdAndUserId(documentId, knowledgeBaseId, userId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "文档不存在"));
+    }
 
-        if (!document.getUserId().equals(userId) || !document.getKnowledgeBaseId().equals(knowledgeBaseId)) {
-            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "文档不存在");
+    private void deleteDocumentResources(KnowledgeDocumentEntity document) {
+        qdrantVectorService.deleteDocumentVectors(document.getUserId(), document.getKnowledgeBaseId(), document.getId());
+
+        if (StringUtils.hasText(document.getStoragePath())) {
+            storageService.delete(toObjectName(document.getStoragePath()));
+        }
+    }
+
+    private String toObjectName(String storagePath) {
+        String prefix = storageService.bucketName() + "/";
+
+        if (storagePath.startsWith(prefix)) {
+            return storagePath.substring(prefix.length());
         }
 
-        return document;
+        return storagePath;
     }
 
     private void refreshKnowledgeBaseStats(KnowledgeBaseEntity knowledgeBase) {

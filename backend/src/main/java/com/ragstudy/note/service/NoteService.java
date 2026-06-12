@@ -72,13 +72,7 @@ public class NoteService {
 
     @Transactional
     public NoteDto saveNote(String userId, String id, NoteSaveRequest request) {
-        NoteEntity note = noteRepository.findById(id)
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "笔记不存在"));
-
-        if (!note.getUserId().equals(userId)) {
-            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "笔记不存在");
-        }
-
+        NoteEntity note = requireOwnedNote(userId, id);
         note.update(sanitizeText(request.title()).trim(), sanitizeText(request.content()));
 
         return NoteConvert.toDto(noteRepository.save(note));
@@ -86,13 +80,7 @@ public class NoteService {
 
     @Transactional
     public NoteDto renameNote(String userId, String id, NoteRenameRequest request) {
-        NoteEntity note = noteRepository.findById(id)
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "笔记不存在"));
-
-        if (!note.getUserId().equals(userId)) {
-            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "笔记不存在");
-        }
-
+        NoteEntity note = requireOwnedNote(userId, id);
         note.rename(sanitizeText(request.title()).trim());
 
         return NoteConvert.toDto(noteRepository.save(note));
@@ -100,15 +88,14 @@ public class NoteService {
 
     @Transactional
     public void deleteNote(String userId, String id) {
-        NoteEntity note = noteRepository.findById(id)
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "笔记不存在"));
-
-        if (!note.getUserId().equals(userId)) {
-            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "笔记不存在");
-        }
-
+        NoteEntity note = requireOwnedNote(userId, id);
         noteAssetService.deleteAssetsForNote(userId, id);
         noteRepository.delete(note);
+    }
+
+    private NoteEntity requireOwnedNote(String userId, String id) {
+        return noteRepository.findByIdAndUserId(id, userId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "笔记不存在"));
     }
 
     private String sanitizeText(String value) {

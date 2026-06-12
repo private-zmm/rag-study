@@ -3,17 +3,24 @@ import zhCN from 'antd/locale/zh_CN';
 import { useState } from 'react';
 import { clearStoredSession, getStoredSession } from './auth/session';
 import AppLayout from './layouts/AppLayout';
+import { clearStoredActivePage, getStoredActivePage, storeActivePage } from './navigation/pageState';
 import AuthPage from './pages/AuthPage';
 import type { AuthSession, PageKey } from './types';
 
 function App() {
-  const [activePage, setActivePage] = useState<PageKey>('chat');
+  const [activePage, setActivePage] = useState<PageKey>(() => getStoredActivePage());
   const [session, setSession] = useState<AuthSession | null>(() => getStoredSession());
+
+  const handlePageChange = (page: PageKey) => {
+    setActivePage(page);
+    storeActivePage(page);
+  };
 
   const handleLogout = () => {
     clearStoredSession();
+    clearStoredActivePage();
     setSession(null);
-    setActivePage('chat');
+    handlePageChange('chat');
   };
 
   return (
@@ -38,7 +45,7 @@ function App() {
         <AppLayout
           activePage={activePage}
           onLogout={handleLogout}
-          onPageChange={setActivePage}
+          onPageChange={handlePageChange}
           user={session.user}
         />
       ) : (

@@ -3,6 +3,7 @@ import type { MenuProps } from 'antd';
 import type { UploadProps } from 'antd';
 import { Database, Ellipsis, FileText, Pencil, Plus, RefreshCw, Trash2, UploadCloud } from 'lucide-react';
 import {
+  batchDeleteKnowledgeDocuments,
   createKnowledgeBase,
   createKnowledgeDocument,
   deleteKnowledgeBase,
@@ -64,6 +65,8 @@ function KnowledgePage({ selectedDocumentId, selectedKnowledgeBaseId: selectedKn
   const [uploading, setUploading] = useState(false);
   const [indexing, setIndexing] = useState(false);
   const [indexingDocumentId, setIndexingDocumentId] = useState<string>();
+  const [selectedDocumentIds, setSelectedDocumentIds] = useState<string[]>([]);
+  const [batchDeleting, setBatchDeleting] = useState(false);
   const selectedKnowledgeBase = knowledgeBases.find((knowledgeBase) => knowledgeBase.id === selectedKnowledgeBaseId);
 
   const loadKnowledgeBases = async () => {
@@ -102,6 +105,10 @@ function KnowledgePage({ selectedDocumentId, selectedKnowledgeBaseId: selectedKn
     try {
       const documentPage = await fetchKnowledgeDocuments(knowledgeBaseId, page, pageSize);
       setDocuments(documentPage.items);
+      setSelectedDocumentIds((currentIds) => {
+        const visibleDocumentIds = new Set(documentPage.items.map((document) => document.id));
+        return currentIds.filter((documentId) => visibleDocumentIds.has(documentId));
+      });
       setDocumentPagination({
         current: documentPage.page,
         pageSize: documentPage.pageSize,
@@ -124,6 +131,10 @@ function KnowledgePage({ selectedDocumentId, selectedKnowledgeBaseId: selectedKn
     }
 
     void loadDocuments(selectedKnowledgeBaseId, 1, documentPagination.pageSize);
+  }, [selectedKnowledgeBaseId]);
+
+  useEffect(() => {
+    setSelectedDocumentIds([]);
   }, [selectedKnowledgeBaseId]);
 
   const openCreateForm = () => {
@@ -267,6 +278,37 @@ function KnowledgePage({ selectedDocumentId, selectedKnowledgeBaseId: selectedKn
     });
   };
 
+  const confirmBatchDeleteDocuments = () => {
+    if (!selectedKnowledgeBaseId || selectedDocumentIds.length === 0) {
+      return;
+    }
+
+    Modal.confirm({
+      title: `删除选中的 ${selectedDocumentIds.length} 个文档？`,
+      content: '将同步删除文档、切片和向量索引。这个操作不可恢复。',
+      okText: '删除',
+      cancelText: '取消',
+      okButtonProps: { danger: true },
+      onOk: async () => {
+        setBatchDeleting(true);
+
+        try {
+          await batchDeleteKnowledgeDocuments(selectedKnowledgeBaseId, selectedDocumentIds);
+          const nextTotal = Math.max(0, documentPagination.total - selectedDocumentIds.length);
+          const nextMaxPage = Math.max(1, Math.ceil(nextTotal / documentPagination.pageSize));
+          setSelectedDocumentIds([]);
+          await loadDocuments(selectedKnowledgeBaseId, Math.min(documentPagination.current, nextMaxPage), documentPagination.pageSize);
+          await loadKnowledgeBases();
+          message.success('选中文档已删除');
+        } catch {
+          message.error('批量删除失败');
+        } finally {
+          setBatchDeleting(false);
+        }
+      },
+    });
+  };
+
   const handleUpload: UploadProps['beforeUpload'] = async (file) => {
     if (!selectedKnowledgeBaseId) {
       message.info('请先选择一个知识库');
@@ -397,6 +439,15 @@ function KnowledgePage({ selectedDocumentId, selectedKnowledgeBaseId: selectedKn
         className="page-card"
         extra={
           <Space>
+            <Button
+              danger
+              icon={<Trash2 size={15} />}
+              disabled={!selectedKnowledgeBaseId || selectedDocumentIds.length === 0}
+              loading={batchDeleting}
+              onClick={confirmBatchDeleteDocuments}
+            >
+              删除选中{selectedDocumentIds.length > 0 ? ` (${selectedDocumentIds.length})` : ''}
+            </Button>
             <Upload showUploadList={false} beforeUpload={handleUpload}>
               <Button icon={<UploadCloud size={15} />} disabled={!selectedKnowledgeBaseId} loading={uploading}>
                 上传文件
@@ -412,6 +463,11 @@ function KnowledgePage({ selectedDocumentId, selectedKnowledgeBaseId: selectedKn
           <Table
             rowKey="id"
             loading={documentsLoading}
+            rowSelection={{
+              selectedRowKeys: selectedDocumentIds,
+              preserveSelectedRowKeys: false,
+              onChange: (selectedRowKeys) => setSelectedDocumentIds(selectedRowKeys.map(String)),
+            }}
             rowClassName={(document) => (document.id === selectedDocumentId ? 'knowledge-document-row active' : '')}
             pagination={{
               current: documentPagination.current,

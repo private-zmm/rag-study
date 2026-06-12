@@ -7,6 +7,7 @@ import com.ragstudy.note.controller.dto.NoteDto;
 import com.ragstudy.note.controller.dto.NoteImportRequest;
 import com.ragstudy.note.controller.dto.NoteKnowledgeSyncRequest;
 import com.ragstudy.note.controller.dto.NoteKnowledgeSyncResponse;
+import com.ragstudy.note.controller.dto.NoteKnowledgeSyncTaskDto;
 import com.ragstudy.note.controller.dto.NoteRenameRequest;
 import com.ragstudy.note.controller.dto.NoteSaveRequest;
 import com.ragstudy.note.service.NoteKnowledgeSyncService;
@@ -72,6 +73,15 @@ public class NoteController {
     ) {
         UserEntity user = authService.requireUser(authorizationHeader);
         return ApiResponse.ok(noteKnowledgeSyncService.syncNotes(user.getId(), request));
+    }
+
+    @GetMapping("/sync-to-knowledge/tasks/{taskId}")
+    public ApiResponse<NoteKnowledgeSyncTaskDto> getSyncTask(
+            @RequestHeader(value = "Authorization", required = false) String authorizationHeader,
+            @PathVariable String taskId
+    ) {
+        UserEntity user = authService.requireUser(authorizationHeader);
+        return ApiResponse.ok(noteKnowledgeSyncService.getTask(user.getId(), taskId));
     }
 
     @PutMapping("/{id}")

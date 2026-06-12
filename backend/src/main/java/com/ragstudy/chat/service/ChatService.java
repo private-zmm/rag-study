@@ -174,14 +174,8 @@ public class ChatService {
     }
 
     private ChatConversationEntity requireOwnedConversation(String userId, String conversationId) {
-        ChatConversationEntity conversation = conversationRepository.findById(conversationId)
+        return conversationRepository.findByIdAndUserId(conversationId, userId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "会话不存在"));
-
-        if (!conversation.getUserId().equals(userId)) {
-            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "会话不存在");
-        }
-
-        return conversation;
     }
 
     private void saveMessage(ChatConversationEntity conversation, String userId, String role, String content) {

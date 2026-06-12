@@ -13,4 +13,6 @@ public interface ChatModelConfigRepository extends JpaRepository<ChatModelConfig
     List<ChatModelConfigEntity> findAllByUserIdOrderByDefaultModelDescUpdatedAtDesc(String userId);
 
     Optional<ChatModelConfigEntity> findFirstByUserIdAndDefaultModelTrue(String userId);
+
+    Optional<ChatModelConfigEntity> findByIdAndUserId(String id, String userId);
 }

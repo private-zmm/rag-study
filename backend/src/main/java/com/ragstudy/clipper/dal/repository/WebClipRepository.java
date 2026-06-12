@@ -11,5 +11,7 @@ public interface WebClipRepository extends JpaRepository<WebClipEntity, String> 
 
     List<WebClipEntity> findAllByUserIdOrderByUpdatedAtDesc(String userId, Pageable pageable);
 
+    Optional<WebClipEntity> findByIdAndUserId(String id, String userId);
+
     Optional<WebClipEntity> findFirstByUserIdAndCanonicalUrlOrderByUpdatedAtDesc(String userId, String canonicalUrl);
 }

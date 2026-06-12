@@ -94,14 +94,8 @@ public class EmbeddingModelConfigService {
     }
 
     private EmbeddingModelConfigEntity requireOwnedConfig(String userId, String id) {
-        EmbeddingModelConfigEntity config = repository.findById(id)
+        return repository.findByIdAndUserId(id, userId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Embedding 模型不存在"));
-
-        if (!config.getUserId().equals(userId)) {
-            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Embedding 模型不存在");
-        }
-
-        return config;
     }
 
     private void clearDefaultConfig(String userId, String exceptId) {

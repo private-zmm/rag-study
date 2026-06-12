@@ -19,7 +19,7 @@ type AppSidebarProps = {
   onConversationDeleted: (conversationId: string) => void;
   onConversationSelect: (conversationId: string) => void;
   onLogout: () => void;
-  onPageChange: (page: PageKey) => void;
+  onPageChange: (page: PageKey, options?: { newChat?: boolean }) => void;
   selectedConversationId?: string;
   user: User;
 };
@@ -206,7 +206,7 @@ function AppSidebar({
             className={activePage === item.key ? styles.active : ''}
             key={item.key}
             type="button"
-            onClick={() => onPageChange(item.key)}
+            onClick={() => onPageChange(item.key, { newChat: item.key === 'chat' })}
           >
           <item.icon size={15} strokeWidth={1.8} />
             <span>{item.label}</span>

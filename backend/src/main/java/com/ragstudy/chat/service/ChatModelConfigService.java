@@ -98,14 +98,8 @@ public class ChatModelConfigService {
     }
 
     private ChatModelConfigEntity requireOwnedConfig(String userId, String id) {
-        ChatModelConfigEntity config = repository.findById(id)
+        return repository.findByIdAndUserId(id, userId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "聊天模型不存在"));
-
-        if (!config.getUserId().equals(userId)) {
-            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "聊天模型不存在");
-        }
-
-        return config;
     }
 
     private void clearDefaultConfig(String userId, String exceptId) {

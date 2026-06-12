@@ -1,5 +1,7 @@
 services:
   backend:
+    image: rag-study-backend:latest
+    container_name: rag-study-backend
     depends_on: []
     environment:
       DB_HOST: yudao-pg
@@ -20,6 +22,8 @@ services:
           - backend
 
   frontend:
+    image: rag-study-frontend:latest
+    container_name: rag-study-frontend
     depends_on: []
     networks:
       code_default:

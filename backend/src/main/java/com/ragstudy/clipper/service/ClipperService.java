@@ -184,14 +184,8 @@ public class ClipperService {
     }
 
     private WebClipEntity requireOwnedClip(String userId, String clipId) {
-        WebClipEntity clip = webClipRepository.findById(clipId)
+        return webClipRepository.findByIdAndUserId(clipId, userId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "剪藏历史不存在"));
-
-        if (!clip.getUserId().equals(userId)) {
-            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "剪藏历史不存在");
-        }
-
-        return clip;
     }
 
     private String resolveClipContent(String userId, WebClipEntity clip) {

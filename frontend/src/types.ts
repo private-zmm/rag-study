@@ -105,6 +105,23 @@ export type KnowledgeDocument = {
   updatedAt: string;
 };
 
+export type NoteKnowledgeSyncTask = {
+  taskId: string;
+  knowledgeBaseId: string;
+  status: 'pending' | 'running' | 'completed' | 'failed';
+  totalNotes: number;
+  processedNotes: number;
+  syncedNotes: number;
+  skippedNotes: number;
+  indexedChunks: number;
+  embeddingModel: string;
+  errorMessage: string | null;
+  createdAt: string;
+  updatedAt: string;
+  startedAt: string | null;
+  finishedAt: string | null;
+};
+
 export type PageResult<T> = {
   items: T[];
   total: number;

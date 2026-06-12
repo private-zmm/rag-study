@@ -75,14 +75,8 @@ public class KnowledgeBaseService {
     }
 
     private KnowledgeBaseEntity requireOwnedKnowledgeBase(String userId, String id) {
-        KnowledgeBaseEntity knowledgeBase = repository.findById(id)
+        return repository.findByIdAndUserId(id, userId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "知识库不存在"));
-
-        if (!knowledgeBase.getUserId().equals(userId)) {
-            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "知识库不存在");
-        }
-
-        return knowledgeBase;
     }
 
     private String normalizeDescription(String description) {
