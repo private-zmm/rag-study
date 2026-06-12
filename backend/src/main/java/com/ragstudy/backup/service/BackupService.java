@@ -7,6 +7,7 @@ import com.ragstudy.backup.controller.dto.BackupItemDto;
 import com.ragstudy.backup.controller.dto.BackupResultDto;
 import com.ragstudy.backup.dal.dataobject.BackupConfigEntity;
 import com.ragstudy.backup.dal.repository.BackupConfigRepository;
+import com.ragstudy.config.DatabaseMigrationService;
 import com.ragstudy.knowledge.framework.MinioStorageProperties;
 import io.minio.BucketExistsArgs;
 import io.minio.GetObjectArgs;
@@ -58,6 +59,7 @@ public class BackupService {
     private static final DateTimeFormatter BACKUP_TIME_FORMATTER = DateTimeFormatter.ofPattern("yyyyMMdd-HHmmss", Locale.ROOT);
 
     private final BackupConfigRepository backupConfigRepository;
+    private final DatabaseMigrationService databaseMigrationService;
     private final DataSource dataSource;
     private final MinioStorageProperties minioStorageProperties;
     private final ObjectMapper objectMapper;
@@ -77,11 +79,13 @@ public class BackupService {
 
     public BackupService(
             BackupConfigRepository backupConfigRepository,
+            DatabaseMigrationService databaseMigrationService,
             DataSource dataSource,
             MinioStorageProperties minioStorageProperties,
             ObjectMapper objectMapper
     ) {
         this.backupConfigRepository = backupConfigRepository;
+        this.databaseMigrationService = databaseMigrationService;
         this.dataSource = dataSource;
         this.minioStorageProperties = minioStorageProperties;
         this.objectMapper = objectMapper;
@@ -336,6 +340,7 @@ public class BackupService {
 
             unzip(backupZip, extractDirectory);
             restoreDatabase(config, extractDirectory.resolve("database.sql"));
+            databaseMigrationService.migrateDatabase();
             restoreObjects(extractDirectory.resolve("objects"));
         } catch (Exception exception) {
             throw new IllegalStateException("恢复备份失败", exception);
