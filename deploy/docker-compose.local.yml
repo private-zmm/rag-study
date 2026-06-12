@@ -4,6 +4,8 @@ services:
     container_name: rag-study-backend
     depends_on: []
     environment:
+      TZ: Asia/Shanghai
+      JAVA_TOOL_OPTIONS: -Duser.timezone=Asia/Shanghai
       DB_HOST: yudao-pg
       DB_PORT: 5432
       DB_NAME: rag-study
@@ -16,6 +18,7 @@ services:
       QDRANT_URL: http://qdrant:6333
       QDRANT_COLLECTION: rag_study_chunks_text_embedding_v4
       QDRANT_VECTOR_SIZE: 1024
+      BACKUP_TIME_ZONE: Asia/Shanghai
     networks:
       code_default:
         aliases:

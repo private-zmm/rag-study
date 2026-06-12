@@ -63,9 +63,10 @@ type BackupFormValues = {
 
 type SettingsPageProps = {
   onConversationsChanged?: () => void;
+  onRequireLogin?: () => void;
 };
 
-function SettingsPage({ onConversationsChanged }: SettingsPageProps) {
+function SettingsPage({ onConversationsChanged, onRequireLogin }: SettingsPageProps) {
   const [form] = Form.useForm<SettingsFormValues>();
   const [embeddingForm] = Form.useForm<EmbeddingFormValues>();
   const [backupForm] = Form.useForm<BackupFormValues>();
@@ -347,7 +348,8 @@ function SettingsPage({ onConversationsChanged }: SettingsPageProps) {
 
         try {
           await restoreBackup(backup.objectName);
-          message.success('备份已恢复，建议刷新页面重新登录');
+          message.success('备份已恢复，请重新登录');
+          onRequireLogin?.();
         } catch {
           message.error('备份恢复失败');
         } finally {

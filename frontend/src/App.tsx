@@ -1,6 +1,7 @@
 import { ConfigProvider } from 'antd';
 import zhCN from 'antd/locale/zh_CN';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
+import { SESSION_EXPIRED_EVENT } from './api/client';
 import { clearStoredSession, getStoredSession } from './auth/session';
 import AppLayout from './layouts/AppLayout';
 import { clearStoredActivePage, getStoredActivePage, storeActivePage } from './navigation/pageState';
@@ -22,6 +23,20 @@ function App() {
     setSession(null);
     handlePageChange('chat');
   };
+
+  useEffect(() => {
+    const handleSessionExpired = () => {
+      clearStoredActivePage();
+      setSession(null);
+      handlePageChange('chat');
+    };
+
+    window.addEventListener(SESSION_EXPIRED_EVENT, handleSessionExpired);
+
+    return () => {
+      window.removeEventListener(SESSION_EXPIRED_EVENT, handleSessionExpired);
+    };
+  }, []);
 
   return (
     <ConfigProvider
@@ -45,6 +60,7 @@ function App() {
         <AppLayout
           activePage={activePage}
           onLogout={handleLogout}
+          onRequireLogin={handleLogout}
           onPageChange={handlePageChange}
           user={session.user}
         />

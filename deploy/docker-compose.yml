@@ -76,6 +76,8 @@ services:
       qdrant:
         condition: service_started
     environment:
+      TZ: ${TZ:-Asia/Shanghai}
+      JAVA_TOOL_OPTIONS: ${JAVA_TOOL_OPTIONS:--Duser.timezone=Asia/Shanghai}
       DB_HOST: postgres
       DB_PORT: 5432
       DB_NAME: ${POSTGRES_DB:-rag-study}
@@ -93,6 +95,7 @@ services:
       AI_MODEL: ${AI_MODEL:-gpt-4o-mini}
       AI_TEMPERATURE: ${AI_TEMPERATURE:-0.3}
       AI_SYSTEM_PROMPT: ${AI_SYSTEM_PROMPT:-你是一个面向学习、笔记和知识库整理的中文助手。回答要清晰、准确、简洁。如果有markdown文档回答要是标准格式。}
+      BACKUP_TIME_ZONE: ${BACKUP_TIME_ZONE:-Asia/Shanghai}
     ports:
       - "${BACKEND_PORT:-18080}:8080"
 

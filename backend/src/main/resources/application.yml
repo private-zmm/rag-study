@@ -36,3 +36,5 @@ rag-study:
     model: ${AI_MODEL:gpt-4o-mini}
     temperature: ${AI_TEMPERATURE:0.3}
     system-prompt: ${AI_SYSTEM_PROMPT:你是一个面向学习、笔记和知识库整理的中文助手。回答要清晰、准确、简洁。如果有markdown文档回答要是标准格式。}
+  backup:
+    time-zone: ${BACKUP_TIME_ZONE:Asia/Shanghai}

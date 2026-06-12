@@ -55,9 +55,7 @@ public class BackupService {
 
     private static final String CONFIG_ID = "s3";
     private static final Logger LOGGER = Logger.getLogger(BackupService.class.getName());
-    private static final DateTimeFormatter BACKUP_TIME_FORMATTER = DateTimeFormatter
-            .ofPattern("yyyyMMdd-HHmmss", Locale.ROOT)
-            .withZone(ZoneId.systemDefault());
+    private static final DateTimeFormatter BACKUP_TIME_FORMATTER = DateTimeFormatter.ofPattern("yyyyMMdd-HHmmss", Locale.ROOT);
 
     private final BackupConfigRepository backupConfigRepository;
     private final DataSource dataSource;
@@ -73,6 +71,9 @@ public class BackupService {
 
     @Value("${spring.datasource.password}")
     private String datasourcePassword;
+
+    @Value("${rag-study.backup.time-zone:Asia/Shanghai}")
+    private String backupTimeZone;
 
     public BackupService(
             BackupConfigRepository backupConfigRepository,
@@ -255,7 +256,7 @@ public class BackupService {
             Path databaseDump = tempDirectory.resolve("database.sql");
             Path backupZip = tempDirectory.resolve("backup.zip");
             Instant now = Instant.now();
-            String fileName = "rag-study-" + BACKUP_TIME_FORMATTER.format(now) + ".zip";
+            String fileName = "rag-study-" + BACKUP_TIME_FORMATTER.withZone(backupZoneId()).format(now) + ".zip";
             String objectName = normalizePrefix(config.getPrefix()) + "/" + fileName;
 
             dumpDatabase(config, databaseDump);
@@ -356,13 +357,17 @@ public class BackupService {
 
         BackupConfigEntity config = optionalConfig.get();
         Instant lastBackupAt = config.getLastBackupAt();
+        ZoneId zoneId = backupZoneId();
+        CronExpression cronExpression = CronExpression.parse(config.getSchedule());
 
         if (lastBackupAt == null) {
-            return true;
+            ZonedDateTime nowInZone = ZonedDateTime.ofInstant(now, zoneId);
+            ZonedDateTime previousHour = nowInZone.minusHours(1);
+            ZonedDateTime nextRun = cronExpression.next(previousHour);
+            return nextRun != null && !nextRun.toInstant().isAfter(now);
         }
 
-        CronExpression cronExpression = CronExpression.parse(config.getSchedule());
-        ZonedDateTime lastRun = ZonedDateTime.ofInstant(lastBackupAt, ZoneId.systemDefault());
+        ZonedDateTime lastRun = ZonedDateTime.ofInstant(lastBackupAt, zoneId);
         ZonedDateTime nextRun = cronExpression.next(lastRun);
 
         return nextRun != null && !nextRun.toInstant().isAfter(now);
@@ -682,6 +687,14 @@ public class BackupService {
 
         if (!StringUtils.hasText(objectName) || !objectName.startsWith(prefix) || !objectName.endsWith(".zip")) {
             throw new IllegalArgumentException("非法备份对象路径");
+        }
+    }
+
+    private ZoneId backupZoneId() {
+        try {
+            return ZoneId.of(backupTimeZone);
+        } catch (Exception exception) {
+            return ZoneId.of("Asia/Shanghai");
         }
     }
 

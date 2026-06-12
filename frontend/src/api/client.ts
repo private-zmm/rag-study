@@ -6,6 +6,12 @@ type ApiResponse<T> = {
 };
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? '/api';
+export const SESSION_EXPIRED_EVENT = 'rag-study-session-expired';
+
+export function notifySessionExpired() {
+  clearStoredSession();
+  window.dispatchEvent(new Event(SESSION_EXPIRED_EVENT));
+}
 
 async function request<T>(path: string, init?: RequestInit & { auth?: boolean }): Promise<T> {
   const { auth, ...fetchInit } = init ?? {};
@@ -31,7 +37,7 @@ async function request<T>(path: string, init?: RequestInit & { auth?: boolean })
     const errorText = await readErrorMessage(response);
 
     if (response.status === 401) {
-      clearStoredSession();
+      notifySessionExpired();
     }
 
     throw new Error(errorText || `API request failed: ${response.status}`);
@@ -299,7 +305,7 @@ export async function streamChatMessage(
 
   if (!response.ok || !response.body) {
     if (response.status === 401) {
-      clearStoredSession();
+      notifySessionExpired();
     }
 
     throw new Error(`API stream request failed: ${response.status}`);

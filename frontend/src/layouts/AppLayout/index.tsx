@@ -13,11 +13,12 @@ import styles from './AppLayout.module.css';
 type AppLayoutProps = {
   activePage: PageKey;
   onLogout: () => void;
+  onRequireLogin: () => void;
   onPageChange: (page: PageKey) => void;
   user: User;
 };
 
-function AppLayout({ activePage, onLogout, onPageChange, user }: AppLayoutProps) {
+function AppLayout({ activePage, onLogout, onRequireLogin, onPageChange, user }: AppLayoutProps) {
   const [newChatVersion, setNewChatVersion] = useState(0);
   const [selectedConversationId, setSelectedConversationId] = useState<string>();
   const [conversationRefreshVersion, setConversationRefreshVersion] = useState(0);
@@ -98,7 +99,12 @@ function AppLayout({ activePage, onLogout, onPageChange, user }: AppLayoutProps)
       />
     ),
     clipper: <ClipperPage />,
-    settings: <SettingsPage onConversationsChanged={() => setConversationRefreshVersion((version) => version + 1)} />,
+    settings: (
+      <SettingsPage
+        onConversationsChanged={() => setConversationRefreshVersion((version) => version + 1)}
+        onRequireLogin={onRequireLogin}
+      />
+    ),
   };
 
   return (
