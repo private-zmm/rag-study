@@ -25,6 +25,7 @@ function AppLayout({ activePage, onLogout, onRequireLogin, onPageChange, user }:
   const [selectedNoteId, setSelectedNoteId] = useState<string>();
   const [selectedKnowledgeBaseId, setSelectedKnowledgeBaseId] = useState<string>();
   const [selectedKnowledgeDocumentId, setSelectedKnowledgeDocumentId] = useState<string>();
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
 
   const handlePageChange = (page: PageKey, options?: { newChat?: boolean }) => {
     if (page === 'chat' && options?.newChat) {
@@ -111,7 +112,9 @@ function AppLayout({ activePage, onLogout, onRequireLogin, onPageChange, user }:
     <Layout className={styles.appShell}>
       <AppSidebar
         activePage={activePage}
+        collapsed={sidebarCollapsed}
         conversationRefreshVersion={conversationRefreshVersion}
+        onToggleCollapsed={() => setSidebarCollapsed((collapsed) => !collapsed)}
         onConversationSelect={handleConversationSelect}
         onConversationArchived={handleConversationArchived}
         onConversationDeleted={handleConversationDeleted}

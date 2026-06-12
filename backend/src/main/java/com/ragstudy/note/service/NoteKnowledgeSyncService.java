@@ -3,7 +3,7 @@ package com.ragstudy.note.service;
 import com.ragstudy.knowledge.controller.dto.KnowledgeIndexResultDto;
 import com.ragstudy.knowledge.dal.dataobject.KnowledgeDocumentEntity;
 import com.ragstudy.knowledge.service.KnowledgeDocumentService;
-import com.ragstudy.knowledge.service.KnowledgeVectorService;
+import com.ragstudy.knowledge.service.KnowledgeIndexService;
 import com.ragstudy.note.controller.dto.NoteKnowledgeSyncRequest;
 import com.ragstudy.note.controller.dto.NoteKnowledgeSyncResponse;
 import com.ragstudy.note.controller.dto.NoteKnowledgeSyncTaskDto;
@@ -34,20 +34,20 @@ public class NoteKnowledgeSyncService {
     private final NoteRepository noteRepository;
     private final NoteSyncTaskRepository taskRepository;
     private final KnowledgeDocumentService knowledgeDocumentService;
-    private final KnowledgeVectorService knowledgeVectorService;
+    private final KnowledgeIndexService knowledgeIndexService;
     private final TaskExecutor applicationTaskExecutor;
 
     public NoteKnowledgeSyncService(
             NoteRepository noteRepository,
             NoteSyncTaskRepository taskRepository,
             KnowledgeDocumentService knowledgeDocumentService,
-            KnowledgeVectorService knowledgeVectorService,
+            KnowledgeIndexService knowledgeIndexService,
             TaskExecutor applicationTaskExecutor
     ) {
         this.noteRepository = noteRepository;
         this.taskRepository = taskRepository;
         this.knowledgeDocumentService = knowledgeDocumentService;
-        this.knowledgeVectorService = knowledgeVectorService;
+        this.knowledgeIndexService = knowledgeIndexService;
         this.applicationTaskExecutor = applicationTaskExecutor;
     }
 
@@ -119,7 +119,7 @@ public class NoteKnowledgeSyncService {
                 rawContent,
                 contentHash
         );
-        KnowledgeIndexResultDto indexResult = knowledgeVectorService.rebuildDocumentIndex(userId, knowledgeBaseId, document.getId());
+        KnowledgeIndexResultDto indexResult = knowledgeIndexService.rebuildDocumentIndex(userId, knowledgeBaseId, document.getId());
 
         task.recordSynced(indexResult.indexedChunks(), indexResult.embeddingModel());
         taskRepository.save(task);

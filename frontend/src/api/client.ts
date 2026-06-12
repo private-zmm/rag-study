@@ -28,7 +28,7 @@ async function request<T>(path: string, init?: RequestInit & { auth?: boolean })
     headers.set('Authorization', `Bearer ${token}`);
   }
 
-  const response = await fetch(`${API_BASE_URL}${path}`, {
+  const response = await sendRequest(`${API_BASE_URL}${path}`, {
     ...fetchInit,
     headers,
   });
@@ -287,6 +287,8 @@ export async function streamChatMessage(
   handlers: {
     onConversation: (conversationId: string) => void;
     onDelta: (delta: string) => void;
+    onStatus?: (status: string) => void;
+    onSuggestions?: (suggestions: string[]) => void;
   },
 ) {
   const token = getStoredSession()?.token;
@@ -297,7 +299,7 @@ export async function streamChatMessage(
     headers.set('Authorization', `Bearer ${token}`);
   }
 
-  const response = await fetch(`${API_BASE_URL}/chat/messages/stream`, {
+  const response = await sendRequest(`${API_BASE_URL}/chat/messages/stream`, {
     method: 'POST',
     headers,
     body: JSON.stringify({ content, modelConfigId, conversationId, knowledgeBaseId }),
@@ -339,8 +341,49 @@ export async function streamChatMessage(
         return;
       }
 
+      if (eventName === 'status') {
+        handlers.onStatus?.(data);
+        return;
+      }
+
+      if (eventName === 'suggestions') {
+        handlers.onSuggestions?.(parseSuggestedQuestions(data));
+        return;
+      }
+
       handlers.onDelta(data);
     });
+  }
+}
+
+async function sendRequest(input: RequestInfo | URL, init?: RequestInit) {
+  try {
+    return await fetch(input, init);
+  } catch (error) {
+    if (error instanceof DOMException && error.name === 'AbortError') {
+      throw error;
+    }
+
+    throw new Error(buildNetworkErrorMessage());
+  }
+}
+
+function buildNetworkErrorMessage() {
+  const apiBase = API_BASE_URL || '/api';
+
+  if (apiBase.startsWith('/')) {
+    return `无法连接后端接口 ${apiBase}。请确认前端通过 Vite dev server 打开，并且后端 8080 正在运行；如果 5173 被占用，请使用终端显示的新端口。`;
+  }
+
+  return `无法连接后端接口 ${apiBase}。请确认后端服务已启动、地址正确，并且浏览器允许跨域访问。`;
+}
+
+function parseSuggestedQuestions(data: string) {
+  try {
+    const parsedData = JSON.parse(data) as unknown;
+    return Array.isArray(parsedData) ? parsedData.filter((item): item is string => typeof item === 'string') : [];
+  } catch {
+    return [];
   }
 }
 

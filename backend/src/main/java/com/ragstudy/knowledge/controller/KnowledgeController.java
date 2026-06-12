@@ -14,7 +14,8 @@ import com.ragstudy.knowledge.controller.dto.KnowledgeSearchRequest;
 import com.ragstudy.knowledge.controller.dto.KnowledgeSearchResultDto;
 import com.ragstudy.knowledge.service.KnowledgeBaseService;
 import com.ragstudy.knowledge.service.KnowledgeDocumentService;
-import com.ragstudy.knowledge.service.KnowledgeVectorService;
+import com.ragstudy.knowledge.service.KnowledgeIndexService;
+import com.ragstudy.knowledge.service.KnowledgeRetrievalService;
 import jakarta.validation.Valid;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -37,18 +38,21 @@ public class KnowledgeController {
 
     private final KnowledgeBaseService knowledgeBaseService;
     private final KnowledgeDocumentService knowledgeDocumentService;
-    private final KnowledgeVectorService knowledgeVectorService;
+    private final KnowledgeIndexService knowledgeIndexService;
+    private final KnowledgeRetrievalService knowledgeRetrievalService;
     private final AuthService authService;
 
     public KnowledgeController(
             KnowledgeBaseService knowledgeBaseService,
             KnowledgeDocumentService knowledgeDocumentService,
-            KnowledgeVectorService knowledgeVectorService,
+            KnowledgeIndexService knowledgeIndexService,
+            KnowledgeRetrievalService knowledgeRetrievalService,
             AuthService authService
     ) {
         this.knowledgeBaseService = knowledgeBaseService;
         this.knowledgeDocumentService = knowledgeDocumentService;
-        this.knowledgeVectorService = knowledgeVectorService;
+        this.knowledgeIndexService = knowledgeIndexService;
+        this.knowledgeRetrievalService = knowledgeRetrievalService;
         this.authService = authService;
     }
 
@@ -169,7 +173,7 @@ public class KnowledgeController {
             @PathVariable String knowledgeBaseId
     ) {
         UserEntity user = authService.requireUser(authorizationHeader);
-        return ApiResponse.ok(knowledgeVectorService.rebuildIndex(user.getId(), knowledgeBaseId));
+        return ApiResponse.ok(knowledgeIndexService.rebuildIndex(user.getId(), knowledgeBaseId));
     }
 
     @PostMapping("/{knowledgeBaseId}/documents/{documentId}/index/rebuild")
@@ -179,7 +183,7 @@ public class KnowledgeController {
             @PathVariable String documentId
     ) {
         UserEntity user = authService.requireUser(authorizationHeader);
-        return ApiResponse.ok(knowledgeVectorService.rebuildDocumentIndex(user.getId(), knowledgeBaseId, documentId));
+        return ApiResponse.ok(knowledgeIndexService.rebuildDocumentIndex(user.getId(), knowledgeBaseId, documentId));
     }
 
     @PostMapping("/{knowledgeBaseId}/search")
@@ -189,7 +193,6 @@ public class KnowledgeController {
             @Valid @RequestBody KnowledgeSearchRequest request
     ) {
         UserEntity user = authService.requireUser(authorizationHeader);
-        int limit = request.limit() == null ? 5 : request.limit();
-        return ApiResponse.ok(knowledgeVectorService.search(user.getId(), knowledgeBaseId, request.query(), limit));
+        return ApiResponse.ok(knowledgeRetrievalService.search(user.getId(), knowledgeBaseId, request.query(), request.limit()));
     }
 }

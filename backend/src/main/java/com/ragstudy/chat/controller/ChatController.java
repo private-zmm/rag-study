@@ -10,6 +10,7 @@ import com.ragstudy.chat.controller.dto.ChatRequest;
 import com.ragstudy.chat.controller.dto.ChatSendResponse;
 import com.ragstudy.chat.dal.dataobject.ChatModelConfigEntity;
 import com.ragstudy.chat.service.ChatService;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.validation.Valid;
 import org.springframework.http.MediaType;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -34,10 +35,12 @@ public class ChatController {
 
     private final ChatService chatService;
     private final AuthService authService;
+    private final ObjectMapper objectMapper;
 
-    public ChatController(ChatService chatService, AuthService authService) {
+    public ChatController(ChatService chatService, AuthService authService, ObjectMapper objectMapper) {
         this.chatService = chatService;
         this.authService = authService;
+        this.objectMapper = objectMapper;
     }
 
     @GetMapping("/conversations")
@@ -115,13 +118,19 @@ public class ChatController {
 
         CompletableFuture.runAsync(() -> {
             try {
+                sendStatus(emitter, "正在创建会话...");
                 String conversationId = chatService.prepareStreamConversation(user.getId(), request);
                 emitter.send(SseEmitter.event().name("conversation").data(conversationId));
+                sendStatus(emitter, "正在整理上下文...");
                 List<ChatMessageDto> conversationSnapshot = chatService.getConversationSnapshot(user.getId(), conversationId);
                 List<ChatMessageDto> modelSnapshot = chatService.enrichStreamSnapshot(user.getId(), request, conversationSnapshot);
                 ChatModelConfigEntity modelConfig = chatService.requireModelConfig(user.getId(), request.modelConfigId());
+                sendStatus(emitter, "正在等待模型响应...");
                 String reply = chatService.streamReply(modelSnapshot, modelConfig, delta -> sendDelta(emitter, delta));
-                chatService.saveAssistantMessage(user.getId(), conversationId, reply);
+                sendStatus(emitter, "正在生成追问建议...");
+                List<String> suggestedQuestions = chatService.generateFollowUpSuggestions(modelSnapshot, reply, modelConfig);
+                chatService.saveAssistantMessage(user.getId(), conversationId, reply, suggestedQuestions);
+                sendSuggestions(emitter, suggestedQuestions);
                 emitter.send(SseEmitter.event().name("done").data("[DONE]"));
                 emitter.complete();
             } catch (Exception exception) {
@@ -132,9 +141,29 @@ public class ChatController {
         return emitter;
     }
 
+    private void sendStatus(SseEmitter emitter, String status) {
+        try {
+            emitter.send(SseEmitter.event().name("status").data(status));
+        } catch (IOException exception) {
+            throw new IllegalStateException("SSE 推送失败", exception);
+        }
+    }
+
     private void sendDelta(SseEmitter emitter, String delta) {
         try {
             emitter.send(SseEmitter.event().name("delta").data(delta));
+        } catch (IOException exception) {
+            throw new IllegalStateException("SSE 推送失败", exception);
+        }
+    }
+
+    private void sendSuggestions(SseEmitter emitter, List<String> suggestedQuestions) {
+        if (suggestedQuestions == null || suggestedQuestions.isEmpty()) {
+            return;
+        }
+
+        try {
+            emitter.send(SseEmitter.event().name("suggestions").data(objectMapper.writeValueAsString(suggestedQuestions)));
         } catch (IOException exception) {
             throw new IllegalStateException("SSE 推送失败", exception);
         }

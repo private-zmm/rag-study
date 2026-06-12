@@ -90,7 +90,7 @@ public class QdrantVectorService {
 
     public UpsertResult upsertChunkWithModel(KnowledgeDocumentChunkEntity chunk) {
         ensureCollection();
-        EmbeddingProviderService.EmbeddingVector embeddingVector = embeddingProviderService.embed(chunk.getUserId(), chunk.getContent());
+        EmbeddingProviderService.EmbeddingVector embeddingVector = embeddingProviderService.embed(chunk.getUserId(), embeddingText(chunk));
         String vectorId = getEmbeddingStore().add(
                 Embedding.from(embeddingVector.vector()),
                 TextSegment.from(chunk.getContent(), chunkMetadata(chunk))
@@ -121,6 +121,8 @@ public class QdrantVectorService {
             results.add(new VectorSearchResult(
                     metadata.getString("chunkId"),
                     metadata.getString("documentId"),
+                    metadata.getString("titlePath"),
+                    metadata.getString("heading"),
                     segment.text(),
                     match.score()
             ));
@@ -183,7 +185,17 @@ public class QdrantVectorService {
                 .put("documentId", chunk.getDocumentId())
                 .put("knowledgeBaseId", chunk.getKnowledgeBaseId())
                 .put("userId", chunk.getUserId())
+                .put("titlePath", chunk.getTitlePath() == null ? "" : chunk.getTitlePath())
+                .put("heading", chunk.getHeading() == null ? "" : chunk.getHeading())
                 .put("chunkIndex", chunk.getChunkIndex());
+    }
+
+    private String embeddingText(KnowledgeDocumentChunkEntity chunk) {
+        if (!StringUtils.hasText(chunk.getTitlePath())) {
+            return chunk.getContent();
+        }
+
+        return "来源：" + chunk.getTitlePath() + "\n\n" + chunk.getContent();
     }
 
     private String collectionUrl() {
@@ -216,7 +228,14 @@ public class QdrantVectorService {
     private record QdrantConnection(String host, int port, boolean useTls) {
     }
 
-    public record VectorSearchResult(String chunkId, String documentId, String content, double score) {
+    public record VectorSearchResult(
+            String chunkId,
+            String documentId,
+            String titlePath,
+            String heading,
+            String content,
+            double score
+    ) {
     }
 
     public record UpsertResult(String vectorId, String embeddingModel) {

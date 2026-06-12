@@ -5,6 +5,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.springframework.web.multipart.MaxUploadSizeExceededException;
 import org.springframework.web.server.ResponseStatusException;
 
 @RestControllerAdvice
@@ -24,6 +25,13 @@ public class GlobalExceptionHandler {
                 .map(error -> error.getDefaultMessage() == null ? "请求参数不正确" : error.getDefaultMessage())
                 .orElse("请求参数不正确");
         return ResponseEntity.badRequest().body(new ApiErrorResponse(message));
+    }
+
+    @ExceptionHandler(MaxUploadSizeExceededException.class)
+    public ResponseEntity<ApiErrorResponse> handleMaxUploadSizeExceeded(MaxUploadSizeExceededException exception) {
+        return ResponseEntity
+                .status(HttpStatus.PAYLOAD_TOO_LARGE)
+                .body(new ApiErrorResponse("文件过大，请上传 50MB 以内的文件，或通过 MAX_UPLOAD_FILE_SIZE 调整限制"));
     }
 
     @ExceptionHandler(Exception.class)

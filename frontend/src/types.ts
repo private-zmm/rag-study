@@ -29,6 +29,8 @@ export type ChatMessage = {
   id: string;
   role: 'ai' | 'user';
   content: string;
+  streamStatus?: string;
+  suggestedQuestions?: string[];
   knowledgeBase?: {
     id: string;
     name: string;

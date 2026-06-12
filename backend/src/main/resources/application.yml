@@ -4,6 +4,10 @@ server:
 spring:
   application:
     name: rag-study-backend
+  servlet:
+    multipart:
+      max-file-size: ${MAX_UPLOAD_FILE_SIZE:50MB}
+      max-request-size: ${MAX_UPLOAD_REQUEST_SIZE:50MB}
   datasource:
     url: jdbc:postgresql://${DB_HOST:192.168.0.198}:${DB_PORT:15432}/${DB_NAME:rag-study}
     username: ${DB_USERNAME:postgres}
@@ -19,22 +23,33 @@ spring:
 rag-study:
   storage:
     minio:
-      endpoint: ${MINIO_ENDPOINT:http://192.168.0.198:19000}
+      endpoint: ${MINIO_ENDPOINT:http://192.168.0.198:29000}
       bucket: ${MINIO_BUCKET:rag-study}
       access-key: ${MINIO_ACCESS_KEY:minioadmin}
-      secret-key: ${MINIO_SECRET_KEY:minioadmin}
+      secret-key: ${MINIO_SECRET_KEY:rag-study-minio-2026}
   vector:
     qdrant:
-      url: ${QDRANT_URL:http://192.168.0.198:16333}
+      url: ${QDRANT_URL:http://192.168.0.198:26333}
       collection: ${QDRANT_COLLECTION:rag_study_chunks_text_embedding_v4}
       vector-size: ${QDRANT_VECTOR_SIZE:1024}
-      grpc-port: ${QDRANT_GRPC_PORT:}
+      grpc-port: ${QDRANT_GRPC_PORT:26334}
       api-key: ${QDRANT_API_KEY:}
+  rag:
+    chunk-size: ${RAG_CHUNK_SIZE:900}
+    chunk-overlap: ${RAG_CHUNK_OVERLAP:120}
+    top-k: ${RAG_TOP_K:5}
+    min-score: ${RAG_MIN_SCORE:0}
+    max-context-tokens: ${RAG_MAX_CONTEXT_TOKENS:2400}
+    same-document-max-chunks: ${RAG_SAME_DOCUMENT_MAX_CHUNKS:2}
+    index-async-enabled: ${RAG_INDEX_ASYNC_ENABLED:false}
   ai:
     base-url: ${AI_BASE_URL:}
     api-key: ${AI_API_KEY:}
     model: ${AI_MODEL:gpt-4o-mini}
     temperature: ${AI_TEMPERATURE:0.3}
+    max-context-messages: ${AI_MAX_CONTEXT_MESSAGES:10}
+    follow-up-suggestions-enabled: ${AI_FOLLOW_UP_SUGGESTIONS_ENABLED:true}
+    follow-up-suggestion-count: ${AI_FOLLOW_UP_SUGGESTION_COUNT:5}
     system-prompt: ${AI_SYSTEM_PROMPT:你是一个面向学习、笔记和知识库整理的中文助手。回答要清晰、准确、简洁。如果有markdown文档回答要是标准格式。}
   backup:
     time-zone: ${BACKUP_TIME_ZONE:Asia/Shanghai}

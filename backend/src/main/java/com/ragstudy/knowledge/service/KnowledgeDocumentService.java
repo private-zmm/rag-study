@@ -5,13 +5,9 @@ import com.ragstudy.knowledge.controller.dto.KnowledgeDocumentDto;
 import com.ragstudy.knowledge.controller.dto.KnowledgeDocumentRequest;
 import com.ragstudy.knowledge.convert.KnowledgeDocumentConvert;
 import com.ragstudy.knowledge.dal.dataobject.KnowledgeBaseEntity;
-import com.ragstudy.knowledge.dal.dataobject.KnowledgeDocumentChunkEntity;
 import com.ragstudy.knowledge.dal.dataobject.KnowledgeDocumentEntity;
 import com.ragstudy.knowledge.dal.repository.KnowledgeBaseRepository;
-import com.ragstudy.knowledge.dal.repository.KnowledgeDocumentChunkRepository;
 import com.ragstudy.knowledge.dal.repository.KnowledgeDocumentRepository;
-import com.ragstudy.knowledge.framework.MinioStorageService;
-import com.ragstudy.knowledge.framework.QdrantVectorService;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
@@ -22,8 +18,6 @@ import org.springframework.util.StringUtils;
 import org.springframework.web.server.ResponseStatusException;
 import org.springframework.web.multipart.MultipartFile;
 
-import java.io.IOException;
-import java.nio.charset.StandardCharsets;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.UUID;
@@ -31,27 +25,24 @@ import java.util.UUID;
 @Service
 public class KnowledgeDocumentService {
 
-    private static final int CHUNK_SIZE = 900;
-    private static final int CHUNK_OVERLAP = 120;
-
     private final KnowledgeBaseRepository knowledgeBaseRepository;
     private final KnowledgeDocumentRepository documentRepository;
-    private final KnowledgeDocumentChunkRepository chunkRepository;
-    private final MinioStorageService storageService;
-    private final QdrantVectorService qdrantVectorService;
+    private final KnowledgeChunkService chunkService;
+    private final KnowledgeDocumentParseService parseService;
+    private final KnowledgeIndexService indexService;
 
     public KnowledgeDocumentService(
             KnowledgeBaseRepository knowledgeBaseRepository,
             KnowledgeDocumentRepository documentRepository,
-            KnowledgeDocumentChunkRepository chunkRepository,
-            MinioStorageService storageService,
-            QdrantVectorService qdrantVectorService
+            KnowledgeChunkService chunkService,
+            KnowledgeDocumentParseService parseService,
+            KnowledgeIndexService indexService
     ) {
         this.knowledgeBaseRepository = knowledgeBaseRepository;
         this.documentRepository = documentRepository;
-        this.chunkRepository = chunkRepository;
-        this.storageService = storageService;
-        this.qdrantVectorService = qdrantVectorService;
+        this.chunkService = chunkService;
+        this.parseService = parseService;
+        this.indexService = indexService;
     }
 
     @Transactional(readOnly = true)
@@ -81,7 +72,7 @@ public class KnowledgeDocumentService {
                 .stream()
                 .map(document -> KnowledgeDocumentConvert.toDto(
                         document,
-                        chunkRepository.countByDocumentIdAndUserId(document.getId(), userId)
+                        chunkService.countDocumentChunks(document.getId(), userId)
                 ))
                 .toList();
 
@@ -96,9 +87,7 @@ public class KnowledgeDocumentService {
     @Transactional
     public KnowledgeDocumentDto createDocument(String userId, String knowledgeBaseId, KnowledgeDocumentRequest request) {
         KnowledgeBaseEntity knowledgeBase = requireOwnedKnowledgeBase(userId, knowledgeBaseId);
-        LocalDateTime now = LocalDateTime.now();
-        KnowledgeDocumentEntity document = new KnowledgeDocumentEntity(
-                UUID.randomUUID().toString(),
+        KnowledgeDocumentEntity document = createParsedDocument(
                 knowledgeBaseId,
                 userId,
                 request.title().trim(),
@@ -107,15 +96,11 @@ public class KnowledgeDocumentService {
                 null,
                 "text/markdown",
                 null,
-                request.rawContent().trim(),
-                "parsed",
-                "pending",
-                now,
-                now
+                request.rawContent().trim()
         );
 
         KnowledgeDocumentEntity savedDocument = documentRepository.save(document);
-        rebuildChunks(savedDocument);
+        chunkService.rebuildChunks(savedDocument);
         refreshKnowledgeBaseStats(knowledgeBase);
         return toDto(savedDocument);
     }
@@ -129,9 +114,7 @@ public class KnowledgeDocumentService {
         KnowledgeDocumentEntity savedDocument;
 
         if (document == null) {
-            LocalDateTime now = LocalDateTime.now();
-            savedDocument = documentRepository.save(new KnowledgeDocumentEntity(
-                    UUID.randomUUID().toString(),
+            savedDocument = documentRepository.save(createParsedDocument(
                     knowledgeBaseId,
                     userId,
                     title.trim(),
@@ -140,18 +123,14 @@ public class KnowledgeDocumentService {
                     null,
                     "text/markdown",
                     null,
-                    rawContent.trim(),
-                    "parsed",
-                    "pending",
-                    now,
-                    now
+                    rawContent.trim()
             ));
         } else {
             document.update(title.trim(), rawContent.trim());
             savedDocument = documentRepository.save(document);
         }
 
-        rebuildChunks(savedDocument);
+        chunkService.rebuildChunks(savedDocument);
         refreshKnowledgeBaseStats(knowledgeBase);
         return savedDocument;
     }
@@ -181,9 +160,7 @@ public class KnowledgeDocumentService {
     @Transactional
     public KnowledgeDocumentDto saveWebDocument(String userId, String knowledgeBaseId, String url, String title, String rawContent) {
         KnowledgeBaseEntity knowledgeBase = requireOwnedKnowledgeBase(userId, knowledgeBaseId);
-        LocalDateTime now = LocalDateTime.now();
-        KnowledgeDocumentEntity document = new KnowledgeDocumentEntity(
-                UUID.randomUUID().toString(),
+        KnowledgeDocumentEntity document = createParsedDocument(
                 knowledgeBaseId,
                 userId,
                 title.trim(),
@@ -192,15 +169,11 @@ public class KnowledgeDocumentService {
                 null,
                 "text/markdown",
                 url,
-                rawContent.trim(),
-                "parsed",
-                "pending",
-                now,
-                now
+                rawContent.trim()
         );
 
         KnowledgeDocumentEntity savedDocument = documentRepository.save(document);
-        rebuildChunks(savedDocument);
+        chunkService.rebuildChunks(savedDocument);
         refreshKnowledgeBaseStats(knowledgeBase);
         return toDto(savedDocument);
     }
@@ -213,24 +186,21 @@ public class KnowledgeDocumentService {
 
         KnowledgeBaseEntity knowledgeBase = requireOwnedKnowledgeBase(userId, knowledgeBaseId);
         String documentId = UUID.randomUUID().toString();
-        String fileName = normalizeFileName(file.getOriginalFilename());
-        String mimeType = StringUtils.hasText(file.getContentType()) ? file.getContentType() : "application/octet-stream";
-        String objectName = "knowledge-bases/" + knowledgeBaseId + "/documents/" + documentId + "/" + fileName;
-        String storagePath = storageService.upload(objectName, file);
-        String rawContent = readRawContent(file, mimeType, fileName);
+        KnowledgeDocumentParseService.ParsedUpload parsedUpload =
+                parseService.uploadAndParse(knowledgeBaseId, documentId, file);
         LocalDateTime now = LocalDateTime.now();
 
         KnowledgeDocumentEntity document = new KnowledgeDocumentEntity(
                 documentId,
                 knowledgeBaseId,
                 userId,
-                fileName,
+                parsedUpload.fileName(),
                 "upload",
                 null,
-                fileName,
-                mimeType,
-                storagePath,
-                rawContent,
+                parsedUpload.fileName(),
+                parsedUpload.mimeType(),
+                parsedUpload.storagePath(),
+                parsedUpload.rawContent(),
                 "parsed",
                 "pending",
                 now,
@@ -238,7 +208,7 @@ public class KnowledgeDocumentService {
         );
 
         KnowledgeDocumentEntity savedDocument = documentRepository.save(document);
-        rebuildChunks(savedDocument);
+        chunkService.rebuildChunks(savedDocument);
         refreshKnowledgeBaseStats(knowledgeBase);
         return toDto(savedDocument);
     }
@@ -249,7 +219,7 @@ public class KnowledgeDocumentService {
         KnowledgeDocumentEntity document = requireOwnedDocument(userId, knowledgeBaseId, documentId);
         document.update(request.title().trim(), request.rawContent().trim());
         KnowledgeDocumentEntity savedDocument = documentRepository.save(document);
-        rebuildChunks(savedDocument);
+        chunkService.rebuildChunks(savedDocument);
         refreshKnowledgeBaseStats(knowledgeBase);
         return toDto(savedDocument);
     }
@@ -259,7 +229,7 @@ public class KnowledgeDocumentService {
         KnowledgeBaseEntity knowledgeBase = requireOwnedKnowledgeBase(userId, knowledgeBaseId);
         KnowledgeDocumentEntity document = requireOwnedDocument(userId, knowledgeBaseId, documentId);
         deleteDocumentResources(document);
-        chunkRepository.deleteAllByDocumentIdAndUserId(document.getId(), userId);
+        chunkService.deleteDocumentChunks(document.getId(), userId);
         documentRepository.delete(document);
         refreshKnowledgeBaseStats(knowledgeBase);
     }
@@ -271,11 +241,41 @@ public class KnowledgeDocumentService {
         for (String documentId : documentIds.stream().distinct().toList()) {
             KnowledgeDocumentEntity document = requireOwnedDocument(userId, knowledgeBaseId, documentId);
             deleteDocumentResources(document);
-            chunkRepository.deleteAllByDocumentIdAndUserId(document.getId(), userId);
+            chunkService.deleteDocumentChunks(document.getId(), userId);
             documentRepository.delete(document);
         }
 
         refreshKnowledgeBaseStats(knowledgeBase);
+    }
+
+    private KnowledgeDocumentEntity createParsedDocument(
+            String knowledgeBaseId,
+            String userId,
+            String title,
+            String sourceType,
+            String sourceId,
+            String fileName,
+            String mimeType,
+            String storagePath,
+            String rawContent
+    ) {
+        LocalDateTime now = LocalDateTime.now();
+        return new KnowledgeDocumentEntity(
+                UUID.randomUUID().toString(),
+                knowledgeBaseId,
+                userId,
+                title,
+                sourceType,
+                sourceId,
+                fileName,
+                mimeType,
+                storagePath,
+                rawContent,
+                "parsed",
+                "pending",
+                now,
+                now
+        );
     }
 
     private KnowledgeBaseEntity requireOwnedKnowledgeBase(String userId, String knowledgeBaseId) {
@@ -289,139 +289,23 @@ public class KnowledgeDocumentService {
     }
 
     private void deleteDocumentResources(KnowledgeDocumentEntity document) {
-        qdrantVectorService.deleteDocumentVectors(document.getUserId(), document.getKnowledgeBaseId(), document.getId());
+        indexService.deleteDocumentVectors(document.getUserId(), document.getKnowledgeBaseId(), document.getId());
 
         if (StringUtils.hasText(document.getStoragePath())) {
-            storageService.delete(toObjectName(document.getStoragePath()));
+            parseService.deleteStoredDocument(document.getStoragePath());
         }
-    }
-
-    private String toObjectName(String storagePath) {
-        String prefix = storageService.bucketName() + "/";
-
-        if (storagePath.startsWith(prefix)) {
-            return storagePath.substring(prefix.length());
-        }
-
-        return storagePath;
     }
 
     private void refreshKnowledgeBaseStats(KnowledgeBaseEntity knowledgeBase) {
         long documentCount = documentRepository.countByKnowledgeBaseIdAndUserId(knowledgeBase.getId(), knowledgeBase.getUserId());
-        long chunkCount = chunkRepository.countByKnowledgeBaseIdAndUserId(knowledgeBase.getId(), knowledgeBase.getUserId());
+        long chunkCount = chunkService.countKnowledgeBaseChunks(knowledgeBase.getId(), knowledgeBase.getUserId());
         String vectorStatus = documentCount == 0 ? "empty" : "indexing";
         knowledgeBase.updateStats(Math.toIntExact(documentCount), Math.toIntExact(chunkCount), vectorStatus);
         knowledgeBaseRepository.save(knowledgeBase);
     }
 
     private KnowledgeDocumentDto toDto(KnowledgeDocumentEntity document) {
-        long chunkCount = chunkRepository.countByDocumentIdAndUserId(document.getId(), document.getUserId());
+        long chunkCount = chunkService.countDocumentChunks(document.getId(), document.getUserId());
         return KnowledgeDocumentConvert.toDto(document, chunkCount);
-    }
-
-    private void rebuildChunks(KnowledgeDocumentEntity document) {
-        chunkRepository.deleteAllByDocumentIdAndUserId(document.getId(), document.getUserId());
-        List<String> chunks = splitContent(document.getRawContent());
-
-        for (int index = 0; index < chunks.size(); index += 1) {
-            String chunk = chunks.get(index);
-            chunkRepository.save(new KnowledgeDocumentChunkEntity(
-                    UUID.randomUUID().toString(),
-                    document.getId(),
-                    document.getKnowledgeBaseId(),
-                    document.getUserId(),
-                    index,
-                    chunk,
-                    estimateTokenCount(chunk),
-                    null,
-                    LocalDateTime.now()
-            ));
-        }
-    }
-
-    private List<String> splitContent(String rawContent) {
-        String normalizedContent = rawContent == null ? "" : rawContent.replaceAll("\\s+", " ").trim();
-
-        if (!StringUtils.hasText(normalizedContent)) {
-            return List.of();
-        }
-
-        if (normalizedContent.length() <= CHUNK_SIZE) {
-            return List.of(normalizedContent);
-        }
-
-        List<String> chunks = new java.util.ArrayList<>();
-        int start = 0;
-
-        while (start < normalizedContent.length()) {
-            int end = Math.min(start + CHUNK_SIZE, normalizedContent.length());
-            int boundary = findChunkBoundary(normalizedContent, start, end);
-            String chunk = normalizedContent.substring(start, boundary).trim();
-
-            if (StringUtils.hasText(chunk)) {
-                chunks.add(chunk);
-            }
-
-            if (boundary >= normalizedContent.length()) {
-                break;
-            }
-
-            start = Math.max(boundary - CHUNK_OVERLAP, start + 1);
-        }
-
-        return chunks;
-    }
-
-    private int findChunkBoundary(String content, int start, int end) {
-        if (end >= content.length()) {
-            return content.length();
-        }
-
-        for (int index = end; index > start + CHUNK_SIZE / 2; index -= 1) {
-            char currentChar = content.charAt(index - 1);
-
-            if (currentChar == '。' || currentChar == '！' || currentChar == '？' || currentChar == '\n') {
-                return index;
-            }
-        }
-
-        return end;
-    }
-
-    private int estimateTokenCount(String content) {
-        return Math.max(1, (int) Math.ceil(content.length() / 1.8));
-    }
-
-    private String normalizeFileName(String originalFileName) {
-        if (!StringUtils.hasText(originalFileName)) {
-            return "untitled";
-        }
-
-        return originalFileName.trim().replaceAll("[\\\\/:*?\"<>|]", "_");
-    }
-
-    private String readRawContent(MultipartFile file, String mimeType, String fileName) {
-        if (isReadableTextFile(mimeType, fileName)) {
-            try {
-                return new String(file.getBytes(), StandardCharsets.UTF_8);
-            } catch (IOException exception) {
-                throw new IllegalStateException("读取上传文件内容失败", exception);
-            }
-        }
-
-        return "文件已上传到 MinIO，文件名：" + fileName + "。当前版本暂未解析该文件类型。";
-    }
-
-    private boolean isReadableTextFile(String mimeType, String fileName) {
-        String normalizedMimeType = mimeType.toLowerCase();
-        String normalizedFileName = fileName.toLowerCase();
-
-        return normalizedMimeType.startsWith("text/")
-                || normalizedMimeType.contains("json")
-                || normalizedFileName.endsWith(".md")
-                || normalizedFileName.endsWith(".markdown")
-                || normalizedFileName.endsWith(".txt")
-                || normalizedFileName.endsWith(".json")
-                || normalizedFileName.endsWith(".csv");
     }
 }

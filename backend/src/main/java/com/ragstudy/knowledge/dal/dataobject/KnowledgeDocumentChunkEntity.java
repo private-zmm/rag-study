@@ -27,6 +27,18 @@ public class KnowledgeDocumentChunkEntity {
     @Column(nullable = false)
     private int chunkIndex;
 
+    @Column(columnDefinition = "text")
+    private String titlePath;
+
+    @Column
+    private String heading;
+
+    @Column
+    private Integer startOffset;
+
+    @Column
+    private Integer endOffset;
+
     @Column(nullable = false, columnDefinition = "text")
     private String content;
 
@@ -64,6 +76,36 @@ public class KnowledgeDocumentChunkEntity {
         this.createdAt = createdAt;
     }
 
+    public KnowledgeDocumentChunkEntity(
+            String id,
+            String documentId,
+            String knowledgeBaseId,
+            String userId,
+            int chunkIndex,
+            String titlePath,
+            String heading,
+            Integer startOffset,
+            Integer endOffset,
+            String content,
+            int tokenCount,
+            String vectorId,
+            LocalDateTime createdAt
+    ) {
+        this.id = id;
+        this.documentId = documentId;
+        this.knowledgeBaseId = knowledgeBaseId;
+        this.userId = userId;
+        this.chunkIndex = chunkIndex;
+        this.titlePath = titlePath;
+        this.heading = heading;
+        this.startOffset = startOffset;
+        this.endOffset = endOffset;
+        this.content = content;
+        this.tokenCount = tokenCount;
+        this.vectorId = vectorId;
+        this.createdAt = createdAt;
+    }
+
     public String getId() {
         return id;
     }
@@ -82,6 +124,22 @@ public class KnowledgeDocumentChunkEntity {
 
     public int getChunkIndex() {
         return chunkIndex;
+    }
+
+    public String getTitlePath() {
+        return titlePath;
+    }
+
+    public String getHeading() {
+        return heading;
+    }
+
+    public Integer getStartOffset() {
+        return startOffset;
+    }
+
+    public Integer getEndOffset() {
+        return endOffset;
     }
 
     public String getContent() {

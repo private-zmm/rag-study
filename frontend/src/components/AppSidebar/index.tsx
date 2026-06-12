@@ -1,7 +1,8 @@
 import { Avatar, Button, Divider, Dropdown, Input, Layout, Modal, Typography, message } from 'antd';
 import type { MenuProps } from 'antd';
-import { Archive, Ellipsis, LogOut, PanelLeftClose, Pencil, Settings, Trash2 } from 'lucide-react';
+import { Archive, Ellipsis, LogOut, PanelLeftClose, PanelLeftOpen, Pencil, Settings, Trash2 } from 'lucide-react';
 import { Fragment, useEffect, useMemo, useState } from 'react';
+import type { KeyboardEvent } from 'react';
 import {
   archiveChatConversation,
   deleteChatConversation,
@@ -14,24 +15,28 @@ import styles from './AppSidebar.module.css';
 
 type AppSidebarProps = {
   activePage: PageKey;
+  collapsed: boolean;
   conversationRefreshVersion: number;
   onConversationArchived: (conversationId: string) => void;
   onConversationDeleted: (conversationId: string) => void;
   onConversationSelect: (conversationId: string) => void;
   onLogout: () => void;
   onPageChange: (page: PageKey, options?: { newChat?: boolean }) => void;
+  onToggleCollapsed: () => void;
   selectedConversationId?: string;
   user: User;
 };
 
 function AppSidebar({
   activePage,
+  collapsed,
   conversationRefreshVersion,
   onConversationArchived,
   onConversationDeleted,
   onConversationSelect,
   onLogout,
   onPageChange,
+  onToggleCollapsed,
   selectedConversationId,
   user,
 }: AppSidebarProps) {
@@ -138,8 +143,17 @@ function AppSidebar({
     }
   };
 
+  const handleConversationItemKeyDown = (event: KeyboardEvent<HTMLDivElement>, conversationId: string) => {
+    if (event.key !== 'Enter' && event.key !== ' ') {
+      return;
+    }
+
+    event.preventDefault();
+    onConversationSelect(conversationId);
+  };
+
   const renderConversationLabel = (conversation: ChatConversation, showTime = false) => (
-    <span className={showTime ? `${styles.conversationRow} ${styles.withTime}` : styles.conversationRow} onClick={(event) => event.stopPropagation()}>
+    <span className={showTime ? `${styles.conversationRow} ${styles.withTime}` : styles.conversationRow}>
       {editingConversationId === conversation.id ? (
         <Input
           autoFocus
@@ -148,6 +162,7 @@ function AppSidebar({
           variant="borderless"
           onBlur={() => void finishRename(conversation)}
           onChange={(event) => setDraftTitle(event.target.value)}
+          onClick={(event) => event.stopPropagation()}
           onKeyDown={(event) => {
             event.stopPropagation();
 
@@ -162,9 +177,9 @@ function AppSidebar({
           }}
         />
       ) : (
-        <button className={styles.conversationTitleButton} type="button" onClick={() => onConversationSelect(conversation.id)}>
+        <span className={styles.conversationTitleText}>
           {conversation.title}
-        </button>
+        </span>
       )}
       {showTime ? <span className={styles.conversationRelativeTime}>{formatRelativeConversationTime(conversation.updatedAt)}</span> : null}
       <Dropdown
@@ -193,11 +208,23 @@ function AppSidebar({
   );
 
   return (
-    <Layout.Sider className={styles.appSidebar} width={232}>
+    <Layout.Sider
+      className={collapsed ? `${styles.appSidebar} ${styles.collapsed}` : styles.appSidebar}
+      collapsed={collapsed}
+      collapsedWidth={72}
+      trigger={null}
+      width={232}
+    >
       <div className={styles.sidebarBrand}>
         <span className={styles.brandBadge}>R</span>
-        <Typography.Text strong>RAG Study</Typography.Text>
-        <Button className={styles.sidebarIconButton} type="text" icon={<PanelLeftClose size={17} />} />
+        <Typography.Text className={styles.brandText} strong>RAG Study</Typography.Text>
+        <Button
+          aria-label={collapsed ? '展开侧边栏' : '收起侧边栏'}
+          className={styles.sidebarIconButton}
+          type="text"
+          icon={collapsed ? <PanelLeftOpen size={17} /> : <PanelLeftClose size={17} />}
+          onClick={onToggleCollapsed}
+        />
       </div>
 
       <nav className={styles.appNav} aria-label="主导航">
@@ -205,6 +232,7 @@ function AppSidebar({
           <button
             className={activePage === item.key ? styles.active : ''}
             key={item.key}
+            title={collapsed ? item.label : undefined}
             type="button"
             onClick={() => onPageChange(item.key, { newChat: item.key === 'chat' })}
           >
@@ -222,18 +250,20 @@ function AppSidebar({
             <div className={`${styles.sidebarSectionTitle} ${styles.conversationTimeGroupTitle}`}>{group.label}</div>
             <div className={styles.sidebarConversationGroup}>
               {group.items.map((conversation) => (
-                <button
+                <div
                   className={
                     selectedConversationId === conversation.id
                       ? `${styles.sidebarConversationItem} ${styles.active}`
                       : styles.sidebarConversationItem
                   }
                   key={conversation.id}
-                  type="button"
+                  role="button"
+                  tabIndex={0}
                   onClick={() => onConversationSelect(conversation.id)}
+                  onKeyDown={(event) => handleConversationItemKeyDown(event, conversation.id)}
                 >
                   {renderConversationLabel(conversation, true)}
-                </button>
+                </div>
               ))}
             </div>
           </Fragment>
@@ -258,9 +288,9 @@ function AppSidebar({
         }}
         trigger={['click']}
       >
-        <button className={styles.sidebarUser} type="button">
+        <button className={styles.sidebarUser} title={collapsed ? displayName : undefined} type="button">
           <Avatar style={{ background: '#1677ff' }}>{avatarText}</Avatar>
-          <div>
+          <div className={styles.sidebarUserText}>
             <Typography.Text>{displayName}</Typography.Text>
             <Typography.Paragraph type="secondary">{user.email}</Typography.Paragraph>
           </div>

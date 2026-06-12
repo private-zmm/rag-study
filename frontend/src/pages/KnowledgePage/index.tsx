@@ -322,8 +322,8 @@ function KnowledgePage({ selectedDocumentId, selectedKnowledgeBaseId: selectedKn
       message.success('文件已上传');
       await loadDocuments(selectedKnowledgeBaseId, 1, documentPagination.pageSize);
       await loadKnowledgeBases();
-    } catch {
-      message.error('文件上传失败，请检查 MinIO 配置');
+    } catch (error) {
+      message.error(error instanceof Error ? error.message : '文件上传失败');
     } finally {
       setUploading(false);
     }

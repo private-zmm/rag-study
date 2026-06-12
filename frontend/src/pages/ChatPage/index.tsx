@@ -105,6 +105,7 @@ function ChatPage({ newChatVersion, onConversationCreated, selectedConversationI
   const senderWrapRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const streamingCreatedConversationRef = useRef<string | undefined>(undefined);
+  const streamWatchdogRef = useRef<number | undefined>(undefined);
   const [currentConversationId, setCurrentConversationId] = useState<string | undefined>(selectedConversationId);
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
   const { data: knowledgeBases } = useApiResource(fetchKnowledgeBases, fallbackKnowledgeBases);
@@ -195,6 +196,12 @@ function ChatPage({ newChatVersion, onConversationCreated, selectedConversationI
       document.removeEventListener('pointerdown', handlePointerDown);
     };
   }, [referenceMenuOpen]);
+
+  useEffect(() => {
+    return () => {
+      window.clearTimeout(streamWatchdogRef.current);
+    };
+  }, []);
 
   useEffect(() => {
     setOpenNoteFolderKeys(new Set(collectReferenceNoteFolderKeys(noteTree)));
@@ -364,6 +371,24 @@ function ChatPage({ newChatVersion, onConversationCreated, selectedConversationI
     }
   };
 
+  const clearStreamWatchdog = () => {
+    window.clearTimeout(streamWatchdogRef.current);
+    streamWatchdogRef.current = undefined;
+  };
+
+  const armStreamWatchdog = (messageId: string) => {
+    clearStreamWatchdog();
+    streamWatchdogRef.current = window.setTimeout(() => {
+      setChatMessages((currentMessages) =>
+        currentMessages.map((messageItem) =>
+          messageItem.id === messageId && !messageItem.content
+            ? { ...messageItem, streamStatus: '模型响应时间较长，仍在等待中...' }
+            : messageItem,
+        ),
+      );
+    }, 20_000);
+  };
+
   const handleSubmitMessage = async (content?: string) => {
     const messageContent = (content ?? inputValue).trim();
 
@@ -399,28 +424,53 @@ function ChatPage({ newChatVersion, onConversationCreated, selectedConversationI
       references: requestReferences.map(({ id, type, title }) => ({ id, type, title })),
     };
     const aiMessageId = createClientMessageId();
-    const aiMessage: ChatMessage = { id: aiMessageId, role: 'ai', content: '' };
+    const aiMessage: ChatMessage = { id: aiMessageId, role: 'ai', content: '', streamStatus: '正在连接模型...' };
 
     setChatMessages((currentMessages) => [...currentMessages, userMessage, aiMessage]);
 
     try {
+      armStreamWatchdog(aiMessageId);
       await streamChatMessage(requestContent, selectedModelConfigId, currentConversationId, requestKnowledgeBaseId, {
         onConversation: (conversationId) => {
+          armStreamWatchdog(aiMessageId);
           streamingCreatedConversationRef.current = conversationId;
           setCurrentConversationId(conversationId);
           onConversationCreated(conversationId);
         },
+        onStatus: (status) => {
+          armStreamWatchdog(aiMessageId);
+          setChatMessages((currentMessages) =>
+            currentMessages.map((messageItem) =>
+              messageItem.id === aiMessageId && !messageItem.content
+                ? { ...messageItem, streamStatus: status }
+                : messageItem,
+            ),
+          );
+        },
         onDelta: (delta) => {
+          armStreamWatchdog(aiMessageId);
           setChatMessages((currentMessages) =>
             currentMessages.map((messageItem) =>
               messageItem.id === aiMessageId
-                ? { ...messageItem, content: messageItem.content + delta }
+                ? { ...messageItem, content: messageItem.content + delta, streamStatus: undefined }
+                : messageItem,
+            ),
+          );
+        },
+        onSuggestions: (suggestions) => {
+          clearStreamWatchdog();
+          setChatMessages((currentMessages) =>
+            currentMessages.map((messageItem) =>
+              messageItem.id === aiMessageId
+                ? { ...messageItem, suggestedQuestions: suggestions }
                 : messageItem,
             ),
           );
         },
       });
+      clearStreamWatchdog();
     } catch {
+      clearStreamWatchdog();
       setChatMessages((currentMessages) => [
         ...currentMessages.filter((messageItem) => messageItem.id !== aiMessageId),
         { id: aiMessageId, role: 'ai', content: '后端暂时没有连接成功，先确认 Spring Boot 是否运行在 8080 端口。' },
@@ -465,7 +515,12 @@ function ChatPage({ newChatVersion, onConversationCreated, selectedConversationI
                 message.role === 'user' ? (
                   <UserChatMessage message={message} />
                 ) : (
-                  <AssistantChatMessage content={message.content} />
+                  <AssistantChatMessage
+                    content={message.content}
+                    streamStatus={message.streamStatus}
+                    suggestedQuestions={message.suggestedQuestions}
+                    onSuggestionClick={(suggestion) => void handleSubmitMessage(suggestion)}
+                  />
                 ),
             }))}
             role={{
@@ -764,10 +819,48 @@ function extractReferencesFromMessageContent(content: string): ChatReference[] {
   return references;
 }
 
-function AssistantChatMessage({ content }: { content: string }) {
+function AssistantChatMessage({
+  content,
+  streamStatus,
+  suggestedQuestions,
+  onSuggestionClick,
+}: {
+  content: string;
+  streamStatus?: string;
+  suggestedQuestions?: string[];
+  onSuggestionClick?: (suggestion: string) => void;
+}) {
   return (
     <div className="assistant-chat-message">
-      <VditorPreviewMessage content={content} />
+      {content ? <VditorPreviewMessage content={content} /> : <WaitingMessage status={streamStatus} />}
+      {suggestedQuestions?.length ? (
+        <div className="follow-up-suggestions" aria-label="追问建议">
+          <div className="follow-up-title">追问</div>
+          {suggestedQuestions.map((suggestion) => (
+            <button
+              className="follow-up-suggestion"
+              key={suggestion}
+              type="button"
+              onClick={() => onSuggestionClick?.(suggestion)}
+            >
+              {suggestion}
+            </button>
+          ))}
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+function WaitingMessage({ status }: { status?: string }) {
+  return (
+    <div className="assistant-waiting-message">
+      <span className="assistant-waiting-dots" aria-hidden="true">
+        <span />
+        <span />
+        <span />
+      </span>
+      <span>{status || '正在等待模型响应...'}</span>
     </div>
   );
 }

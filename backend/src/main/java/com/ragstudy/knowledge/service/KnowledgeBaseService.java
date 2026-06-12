@@ -5,7 +5,6 @@ import com.ragstudy.knowledge.controller.dto.KnowledgeBaseRequest;
 import com.ragstudy.knowledge.convert.KnowledgeBaseConvert;
 import com.ragstudy.knowledge.dal.dataobject.KnowledgeBaseEntity;
 import com.ragstudy.knowledge.dal.repository.KnowledgeBaseRepository;
-import com.ragstudy.knowledge.dal.repository.KnowledgeDocumentChunkRepository;
 import com.ragstudy.knowledge.dal.repository.KnowledgeDocumentRepository;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
@@ -21,16 +20,16 @@ public class KnowledgeBaseService {
 
     private final KnowledgeBaseRepository repository;
     private final KnowledgeDocumentRepository documentRepository;
-    private final KnowledgeDocumentChunkRepository chunkRepository;
+    private final KnowledgeChunkService chunkService;
 
     public KnowledgeBaseService(
             KnowledgeBaseRepository repository,
             KnowledgeDocumentRepository documentRepository,
-            KnowledgeDocumentChunkRepository chunkRepository
+            KnowledgeChunkService chunkService
     ) {
         this.repository = repository;
         this.documentRepository = documentRepository;
-        this.chunkRepository = chunkRepository;
+        this.chunkService = chunkService;
     }
 
     @Transactional(readOnly = true)
@@ -69,7 +68,7 @@ public class KnowledgeBaseService {
     @Transactional
     public void deleteKnowledgeBase(String userId, String id) {
         KnowledgeBaseEntity knowledgeBase = requireOwnedKnowledgeBase(userId, id);
-        chunkRepository.deleteAllByKnowledgeBaseIdAndUserId(knowledgeBase.getId(), userId);
+        chunkService.deleteKnowledgeBaseChunks(knowledgeBase.getId(), userId);
         documentRepository.deleteAllByKnowledgeBaseIdAndUserId(knowledgeBase.getId(), userId);
         repository.delete(knowledgeBase);
     }
