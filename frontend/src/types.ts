@@ -152,7 +152,7 @@ export type ClipperPreview = {
 };
 
 export type ClipperProxyConfig = {
-  protocol: 'HTTP' | 'HTTPS' | 'SOCKS5';
+  protocol: 'HTTP' | 'SOCKS5';
   host: string;
   port: number | null;
   username: string;

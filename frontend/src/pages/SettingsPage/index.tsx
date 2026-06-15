@@ -65,7 +65,7 @@ type BackupFormValues = {
 };
 
 type ClipperProxyFormValues = {
-  protocol: 'HTTP' | 'HTTPS' | 'SOCKS5';
+  protocol: 'HTTP' | 'SOCKS5';
   host: string;
   port?: number;
   username?: string;
@@ -824,20 +824,19 @@ function SettingsPage({ onConversationsChanged, onRequireLogin }: SettingsPagePr
                   >
                     <Typography.Title level={4}>剪藏代理设置</Typography.Title>
                     <Typography.Paragraph type="secondary">
-                      仅影响网页剪藏的抓取请求，不影响模型、备份和其他内部请求。
+                      仅影响网页剪藏的抓取请求。抓取 HTTPS 网页时也选 HTTP 代理；SOCKS5 请使用对应的 SOCKS 端口。
                     </Typography.Paragraph>
                     <div className="settings-backup-grid">
                       <Form.Item label="代理协议" name="protocol" rules={[{ required: true, message: '请选择代理协议' }]}>
                         <Select
                           options={[
                             { label: 'HTTP', value: 'HTTP' },
-                            { label: 'HTTPS', value: 'HTTPS' },
                             { label: 'SOCKS5', value: 'SOCKS5' },
                           ]}
                         />
                       </Form.Item>
                       <Form.Item label="代理地址" name="host" rules={[{ required: true, message: '请输入代理地址' }]}>
-                        <Input placeholder="127.0.0.1" />
+                        <Input placeholder="192.168.0.198" />
                       </Form.Item>
                       <Form.Item label="端口" name="port" rules={[{ required: true, message: '请输入端口' }]}>
                         <Input type="number" min={1} max={65535} placeholder="7890" />

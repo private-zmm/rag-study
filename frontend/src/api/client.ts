@@ -555,7 +555,7 @@ export function fetchClipperProxyConfig() {
 }
 
 export function saveClipperProxyConfig(payload: {
-  protocol: string;
+  protocol: 'HTTP' | 'SOCKS5';
   host: string;
   port: number;
   username?: string;
@@ -568,7 +568,7 @@ export function saveClipperProxyConfig(payload: {
 }
 
 export function testClipperProxyConfig(payload: {
-  protocol: string;
+  protocol: 'HTTP' | 'SOCKS5';
   host: string;
   port: number;
   username?: string;
