@@ -62,5 +62,17 @@ public class DatabaseMigrationService {
                 """);
         jdbcTemplate.execute("create index if not exists idx_note_sync_tasks_user_updated on note_sync_tasks(user_id, updated_at desc)");
         jdbcTemplate.execute("create index if not exists idx_note_sync_tasks_user_status on note_sync_tasks(user_id, status)");
+        jdbcTemplate.execute("""
+                create table if not exists clipper_proxy_configs (
+                    id varchar(255) primary key,
+                    protocol varchar(32) not null,
+                    host varchar(255) not null,
+                    port integer not null,
+                    username varchar(255),
+                    password varchar(255),
+                    created_at timestamp,
+                    updated_at timestamp
+                )
+                """);
     }
 }

@@ -10,19 +10,22 @@ import {
   fetchBackupConfig,
   fetchBackups,
   fetchChatConversations,
+  fetchClipperProxyConfig,
   fetchEmbeddingModelConfigs,
   fetchChatModelConfigs,
   restoreBackup,
   restoreChatConversation,
   saveBackupConfig,
+  saveClipperProxyConfig,
   setDefaultEmbeddingModelConfig,
   setDefaultChatModelConfig,
   testBackupDatabaseTools,
   testBackupConfig,
+  testClipperProxyConfig,
   updateEmbeddingModelConfig,
   updateChatModelConfig,
 } from '../../api/client';
-import type { BackupConfig, BackupItem, ChatConversation, ChatModelConfig, EmbeddingModelConfig } from '../../types';
+import type { BackupConfig, BackupItem, ChatConversation, ChatModelConfig, ClipperProxyConfig, EmbeddingModelConfig } from '../../types';
 import './SettingsPage.css';
 
 type SettingsFormValues = {
@@ -61,6 +64,14 @@ type BackupFormValues = {
   psqlPath?: string;
 };
 
+type ClipperProxyFormValues = {
+  protocol: 'HTTP' | 'HTTPS' | 'SOCKS5';
+  host: string;
+  port?: number;
+  username?: string;
+  password?: string;
+};
+
 type SettingsPageProps = {
   onConversationsChanged?: () => void;
   onRequireLogin?: () => void;
@@ -70,15 +81,19 @@ function SettingsPage({ onConversationsChanged, onRequireLogin }: SettingsPagePr
   const [form] = Form.useForm<SettingsFormValues>();
   const [embeddingForm] = Form.useForm<EmbeddingFormValues>();
   const [backupForm] = Form.useForm<BackupFormValues>();
+  const [clipperProxyForm] = Form.useForm<ClipperProxyFormValues>();
   const [modelConfigs, setModelConfigs] = useState<ChatModelConfig[]>([]);
   const [embeddingConfigs, setEmbeddingConfigs] = useState<EmbeddingModelConfig[]>([]);
   const [archivedConversations, setArchivedConversations] = useState<ChatConversation[]>([]);
   const [backupConfig, setBackupConfig] = useState<BackupConfig | null>(null);
+  const [clipperProxyConfig, setClipperProxyConfig] = useState<ClipperProxyConfig | null>(null);
   const [backups, setBackups] = useState<BackupItem[]>([]);
   const [editingConfig, setEditingConfig] = useState<ChatModelConfig | null>(null);
   const [editingEmbeddingConfig, setEditingEmbeddingConfig] = useState<EmbeddingModelConfig | null>(null);
   const [savingBackupConfig, setSavingBackupConfig] = useState(false);
+  const [savingClipperProxyConfig, setSavingClipperProxyConfig] = useState(false);
   const [testingBackupConfig, setTestingBackupConfig] = useState(false);
+  const [testingClipperProxyConfig, setTestingClipperProxyConfig] = useState(false);
   const [testingDatabaseTools, setTestingDatabaseTools] = useState(false);
   const [runningBackup, setRunningBackup] = useState(false);
   const [restoringBackupObjectName, setRestoringBackupObjectName] = useState<string>();
@@ -96,6 +111,7 @@ function SettingsPage({ onConversationsChanged, onRequireLogin }: SettingsPagePr
     void loadEmbeddingConfigs();
     void loadArchivedConversations();
     void loadBackupConfig();
+    void loadClipperProxyConfig();
     void loadBackups();
   }, []);
 
@@ -260,6 +276,58 @@ function SettingsPage({ onConversationsChanged, onRequireLogin }: SettingsPagePr
       setBackups(await fetchBackups());
     } catch {
       setBackups([]);
+    }
+  };
+
+  const loadClipperProxyConfig = async () => {
+    try {
+      const config = await fetchClipperProxyConfig();
+      setClipperProxyConfig(config);
+      clipperProxyForm.setFieldsValue({
+        protocol: config.protocol,
+        host: config.host,
+        port: config.port ?? undefined,
+        username: config.username,
+        password: '',
+      });
+    } catch {
+      message.error('剪藏代理配置加载失败');
+    }
+  };
+
+  const handleSaveClipperProxyConfig = async () => {
+    const values = await clipperProxyForm.validateFields();
+    setSavingClipperProxyConfig(true);
+
+    try {
+      const savedConfig = await saveClipperProxyConfig({
+        ...values,
+        port: Number(values.port),
+      });
+      setClipperProxyConfig(savedConfig);
+      clipperProxyForm.setFieldValue('password', '');
+      message.success('剪藏代理配置已保存');
+    } catch (error) {
+      message.error(error instanceof Error ? error.message : '剪藏代理配置保存失败');
+    } finally {
+      setSavingClipperProxyConfig(false);
+    }
+  };
+
+  const handleTestClipperProxyConfig = async () => {
+    const values = await clipperProxyForm.validateFields();
+    setTestingClipperProxyConfig(true);
+
+    try {
+      await testClipperProxyConfig({
+        ...values,
+        port: Number(values.port),
+      });
+      message.success('剪藏代理测试成功');
+    } catch (error) {
+      message.error(error instanceof Error ? error.message : '剪藏代理测试失败');
+    } finally {
+      setTestingClipperProxyConfig(false);
     }
   };
 
@@ -737,6 +805,59 @@ function SettingsPage({ onConversationsChanged, onRequireLogin }: SettingsPagePr
                       </List.Item>
                     )}
                   />
+                </Card>
+              ),
+            },
+            {
+              key: 'clipper-proxy',
+              label: '剪藏代理',
+              children: (
+                <Card variant="borderless">
+                  <Form
+                    form={clipperProxyForm}
+                    initialValues={{
+                      protocol: 'HTTP',
+                      host: '',
+                      port: 7890,
+                    }}
+                    layout="vertical"
+                  >
+                    <Typography.Title level={4}>剪藏代理设置</Typography.Title>
+                    <Typography.Paragraph type="secondary">
+                      仅影响网页剪藏的抓取请求，不影响模型、备份和其他内部请求。
+                    </Typography.Paragraph>
+                    <div className="settings-backup-grid">
+                      <Form.Item label="代理协议" name="protocol" rules={[{ required: true, message: '请选择代理协议' }]}>
+                        <Select
+                          options={[
+                            { label: 'HTTP', value: 'HTTP' },
+                            { label: 'HTTPS', value: 'HTTPS' },
+                            { label: 'SOCKS5', value: 'SOCKS5' },
+                          ]}
+                        />
+                      </Form.Item>
+                      <Form.Item label="代理地址" name="host" rules={[{ required: true, message: '请输入代理地址' }]}>
+                        <Input placeholder="127.0.0.1" />
+                      </Form.Item>
+                      <Form.Item label="端口" name="port" rules={[{ required: true, message: '请输入端口' }]}>
+                        <Input type="number" min={1} max={65535} placeholder="7890" />
+                      </Form.Item>
+                      <Form.Item label="认证用户名" name="username">
+                        <Input placeholder="可选" />
+                      </Form.Item>
+                      <Form.Item label="认证密码" name="password">
+                        <Input.Password placeholder={clipperProxyConfig?.passwordConfigured ? '留空保持不变' : '可选'} />
+                      </Form.Item>
+                    </div>
+                    <Space>
+                      <Button loading={testingClipperProxyConfig} onClick={() => void handleTestClipperProxyConfig()}>
+                        测试连接
+                      </Button>
+                      <Button type="primary" loading={savingClipperProxyConfig} onClick={() => void handleSaveClipperProxyConfig()}>
+                        保存
+                      </Button>
+                    </Space>
+                  </Form>
                 </Card>
               ),
             },

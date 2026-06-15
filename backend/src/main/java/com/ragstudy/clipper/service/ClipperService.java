@@ -67,15 +67,18 @@ public class ClipperService {
     private static final Pattern BACKGROUND_IMAGE_PATTERN = Pattern.compile("(?i)background(?:-image)?\\s*:[^;]*url\\((['\"]?)(.*?)\\1\\)");
 
     private final HttpClient httpClient;
+    private final ClipperProxyConfigService proxyConfigService;
     private final KnowledgeDocumentService knowledgeDocumentService;
     private final WebClipRepository webClipRepository;
     private final MinioStorageService storageService;
 
     public ClipperService(
+            ClipperProxyConfigService proxyConfigService,
             KnowledgeDocumentService knowledgeDocumentService,
             WebClipRepository webClipRepository,
             MinioStorageService storageService
     ) {
+        this.proxyConfigService = proxyConfigService;
         this.knowledgeDocumentService = knowledgeDocumentService;
         this.webClipRepository = webClipRepository;
         this.storageService = storageService;
@@ -88,7 +91,8 @@ public class ClipperService {
     @Transactional(readOnly = true)
     public ClipperPreviewDto preview(String userId, ClipperPreviewRequest request) {
         URI uri = parseAndValidateUri(request.url());
-        ParsedPage parsedPage = parsePage(userId, fetchPage(uri), uri.toString(), normalizeMode(request.mode()));
+        HttpClient fetchClient = httpClientFor(request.useProxy());
+        ParsedPage parsedPage = parsePage(userId, fetchPage(fetchClient, uri), uri.toString(), normalizeMode(request.mode()), fetchClient);
         WebClipDto existingClip = webClipRepository
                 .findFirstByUserIdAndCanonicalUrlOrderByUpdatedAtDesc(userId, canonicalizeUrl(uri))
                 .map(WebClipConvert::toDto)
@@ -138,7 +142,8 @@ public class ClipperService {
         String content = sanitizeContent(request.content());
 
         if (!StringUtils.hasText(title) || !StringUtils.hasText(content)) {
-            ParsedPage parsedPage = parsePage(userId, fetchPage(uri), uri.toString(), normalizeMode(request.mode()));
+            HttpClient fetchClient = httpClientFor(request.useProxy());
+            ParsedPage parsedPage = parsePage(userId, fetchPage(fetchClient, uri), uri.toString(), normalizeMode(request.mode()), fetchClient);
             title = StringUtils.hasText(title) ? title : parsedPage.title();
             content = StringUtils.hasText(content) ? content : parsedPage.content();
         }
@@ -341,11 +346,11 @@ public class ClipperService {
         }
     }
 
-    private FetchedPage fetchPage(URI uri) {
-        return fetchPage(uri, 0);
+    private FetchedPage fetchPage(HttpClient fetchClient, URI uri) {
+        return fetchPage(fetchClient, uri, 0);
     }
 
-    private FetchedPage fetchPage(URI uri, int redirectCount) {
+    private FetchedPage fetchPage(HttpClient fetchClient, URI uri, int redirectCount) {
         HttpRequest httpRequest = HttpRequest.newBuilder(uri)
                 .timeout(Duration.ofSeconds(15))
                 .header("Accept", "text/html,text/plain;q=0.9,*/*;q=0.1")
@@ -357,7 +362,7 @@ public class ClipperService {
         HttpResponse<byte[]> response;
 
         try {
-            response = httpClient.send(httpRequest, HttpResponse.BodyHandlers.ofByteArray());
+            response = fetchClient.send(httpRequest, HttpResponse.BodyHandlers.ofByteArray());
         } catch (IOException exception) {
             throw new ResponseStatusException(HttpStatus.BAD_GATEWAY, "网页抓取失败：" + describeException(exception), exception);
         } catch (InterruptedException exception) {
@@ -373,7 +378,7 @@ public class ClipperService {
             String location = response.headers().firstValue("location")
                     .orElseThrow(() -> new ResponseStatusException(HttpStatus.BAD_GATEWAY, "网页重定向缺少 Location"));
             URI nextUri = parseAndValidateUri(uri.resolve(location).toString());
-            return fetchPage(nextUri, redirectCount + 1);
+            return fetchPage(fetchClient, nextUri, redirectCount + 1);
         }
 
         if (response.statusCode() < 200 || response.statusCode() >= 300) {
@@ -420,7 +425,7 @@ public class ClipperService {
         return StandardCharsets.UTF_8;
     }
 
-    private ParsedPage parsePage(String userId, FetchedPage page, String requestedUrl, String mode) {
+    private ParsedPage parsePage(String userId, FetchedPage page, String requestedUrl, String mode, HttpClient fetchClient) {
         if (page.contentType().toLowerCase(Locale.ROOT).startsWith("text/plain")) {
             String title = titleFromUrl(requestedUrl);
             String content = toMarkdown(title, requestedUrl, truncate(page.html().trim(), MAX_CONTENT_CHARS));
@@ -433,7 +438,7 @@ public class ClipperService {
         String title = extractTitle(document, requestedUrl);
         String siteName = extractSiteName(document, requestedUrl);
         Element contentElement = "full".equalsIgnoreCase(mode) ? document.body() : findMainContent(document);
-        ImageLocalizeContext imageContext = new ImageLocalizeContext(userId, page.url());
+        ImageLocalizeContext imageContext = new ImageLocalizeContext(userId, page.url(), fetchClient);
         String contentMarkdown = markdownFromElement(contentElement, imageContext);
         String coverImage = localizeImage(imageContext, extractCoverImage(document));
         String markdown = toMarkdown(title, requestedUrl, prependCoverImage(contentMarkdown, coverImage));
@@ -958,7 +963,7 @@ public class ClipperService {
                 .build();
 
         try {
-            HttpResponse<byte[]> response = httpClient.send(imageRequest, HttpResponse.BodyHandlers.ofByteArray());
+            HttpResponse<byte[]> response = context.httpClient.send(imageRequest, HttpResponse.BodyHandlers.ofByteArray());
 
             if (response.statusCode() < 200 || response.statusCode() >= 300 || response.body().length > MAX_IMAGE_BYTES) {
                 return imageUrl;
@@ -1201,6 +1206,15 @@ public class ClipperService {
         return StringUtils.hasText(mode) ? mode : "auto";
     }
 
+    private HttpClient httpClientFor(Boolean useProxy) {
+        if (!Boolean.TRUE.equals(useProxy)) {
+            return httpClient;
+        }
+
+        return proxyConfigService.createClipperProxyClient()
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.BAD_REQUEST, "请先配置剪藏代理"));
+    }
+
     private String normalizeTarget(String target) {
         return StringUtils.hasText(target) ? target.toLowerCase(Locale.ROOT) : "clip";
     }
@@ -1225,11 +1239,13 @@ public class ClipperService {
 
         private final String userId;
         private final String pageUrl;
+        private final HttpClient httpClient;
         private int downloadedImages;
 
-        private ImageLocalizeContext(String userId, String pageUrl) {
+        private ImageLocalizeContext(String userId, String pageUrl, HttpClient httpClient) {
             this.userId = userId;
             this.pageUrl = pageUrl;
+            this.httpClient = httpClient;
         }
     }
 }

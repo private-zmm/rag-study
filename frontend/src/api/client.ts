@@ -1,5 +1,5 @@
 import { clearStoredSession, getStoredSession } from '../auth/session';
-import type { AuthSession, BackupConfig, BackupItem, BackupResult, ChatConversation, ChatMessage, ChatModelConfig, ClipperPreview, ClipperResult, EmbeddingModelConfig, GlobalSearchResult, KnowledgeBase, KnowledgeDocument, Note, NoteFolder, NoteKnowledgeSyncTask, PageResult, User, WebClip } from '../types';
+import type { AuthSession, BackupConfig, BackupItem, BackupResult, ChatConversation, ChatMessage, ChatModelConfig, ClipperPreview, ClipperProxyConfig, ClipperResult, EmbeddingModelConfig, GlobalSearchResult, KnowledgeBase, KnowledgeDocument, Note, NoteFolder, NoteKnowledgeSyncTask, PageResult, User, WebClip } from '../types';
 
 type ApiResponse<T> = {
   data: T;
@@ -514,7 +514,7 @@ export function deleteNote(id: string) {
   });
 }
 
-export function previewClipper(payload: { url: string; mode: string }) {
+export function previewClipper(payload: { url: string; mode: string; useProxy?: boolean }) {
   return request<ClipperPreview>('/clipper/preview', {
     method: 'POST',
     body: JSON.stringify(payload),
@@ -542,8 +542,39 @@ export function submitClipper(payload: {
   content: string;
   target: string;
   mode: string;
+  useProxy?: boolean;
 }) {
   return request<ClipperResult>('/clipper', {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  });
+}
+
+export function fetchClipperProxyConfig() {
+  return request<ClipperProxyConfig>('/clipper/proxy-config');
+}
+
+export function saveClipperProxyConfig(payload: {
+  protocol: string;
+  host: string;
+  port: number;
+  username?: string;
+  password?: string;
+}) {
+  return request<ClipperProxyConfig>('/clipper/proxy-config', {
+    method: 'PATCH',
+    body: JSON.stringify(payload),
+  });
+}
+
+export function testClipperProxyConfig(payload: {
+  protocol: string;
+  host: string;
+  port: number;
+  username?: string;
+  password?: string;
+}) {
+  return request<void>('/clipper/proxy-config/test', {
     method: 'POST',
     body: JSON.stringify(payload),
   });

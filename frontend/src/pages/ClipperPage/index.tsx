@@ -1,4 +1,4 @@
-import { Alert, Button, Empty, Form, Input, List, Modal, Radio, Select, Space, Statistic, Tooltip, Typography, message } from 'antd';
+import { Alert, Button, Checkbox, Empty, Form, Input, List, Modal, Radio, Select, Space, Statistic, Tooltip, Typography, message } from 'antd';
 import { Clock3, FileText, Globe, Save, Trash2, WandSparkles } from 'lucide-react';
 import { Fragment, useEffect, useMemo, useState } from 'react';
 import { deleteWebClipHistory, fetchKnowledgeBases, fetchWebClipHistory, fetchWebClipHistoryItem, previewClipper, submitClipper } from '../../api/client';
@@ -11,6 +11,7 @@ function ClipperPage() {
   const [knowledgeBases, setKnowledgeBases] = useState<KnowledgeBase[]>([]);
   const [knowledgeBaseId, setKnowledgeBaseId] = useState<string>();
   const [mode, setMode] = useState('auto');
+  const [useProxy, setUseProxy] = useState(false);
   const [preview, setPreview] = useState<ClipperPreview | null>(null);
   const [title, setTitle] = useState('');
   const [content, setContent] = useState('');
@@ -67,7 +68,7 @@ function ClipperPage() {
     setSelectedClipId(null);
 
     try {
-      const nextPreview = await previewClipper({ url: nextUrl, mode });
+      const nextPreview = await previewClipper({ url: nextUrl, mode, useProxy });
       setPreview(nextPreview);
       setUrl(nextPreview.url);
       setTitle(nextPreview.title);
@@ -111,6 +112,7 @@ function ClipperPage() {
         content,
         target,
         mode,
+        useProxy,
       });
       setResult(clipperResult);
       message.success(target === 'knowledge' ? '网页已保存到知识库' : '剪藏已保存');
@@ -289,6 +291,12 @@ function ClipperPage() {
                 <Radio value="auto">智能正文</Radio>
                 <Radio value="full">完整页面</Radio>
               </Radio.Group>
+            </Form.Item>
+
+            <Form.Item>
+              <Checkbox checked={useProxy} onChange={(event) => setUseProxy(event.target.checked)}>
+                使用代理抓取
+              </Checkbox>
             </Form.Item>
 
             <Space wrap>

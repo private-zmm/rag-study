@@ -151,6 +151,14 @@ export type ClipperPreview = {
   existingClip: WebClip | null;
 };
 
+export type ClipperProxyConfig = {
+  protocol: 'HTTP' | 'HTTPS' | 'SOCKS5';
+  host: string;
+  port: number | null;
+  username: string;
+  passwordConfigured: boolean;
+};
+
 export type WebClip = {
   id: string;
   knowledgeBaseId: string | null;

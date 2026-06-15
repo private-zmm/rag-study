@@ -4,6 +4,7 @@ import jakarta.validation.constraints.NotBlank;
 
 public record ClipperPreviewRequest(
         @NotBlank String url,
-        String mode
+        String mode,
+        Boolean useProxy
 ) {
 }

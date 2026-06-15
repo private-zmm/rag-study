@@ -8,6 +8,7 @@ public record ClipperRequest(
         String title,
         String content,
         String target,
-        String mode
+        String mode,
+        Boolean useProxy
 ) {
 }
