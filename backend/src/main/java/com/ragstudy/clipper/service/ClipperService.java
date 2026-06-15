@@ -26,7 +26,10 @@ import org.springframework.web.server.ResponseStatusException;
 
 import java.io.IOException;
 import java.net.InetAddress;
+import java.net.HttpURLConnection;
+import java.net.Proxy;
 import java.net.URI;
+import java.net.URLConnection;
 import java.net.URLDecoder;
 import java.net.URLEncoder;
 import java.net.http.HttpClient;
@@ -91,8 +94,8 @@ public class ClipperService {
     @Transactional(readOnly = true)
     public ClipperPreviewDto preview(String userId, ClipperPreviewRequest request) {
         URI uri = parseAndValidateUri(request.url());
-        HttpClient fetchClient = httpClientFor(request.useProxy());
-        ParsedPage parsedPage = parsePage(userId, fetchPage(fetchClient, uri), uri.toString(), normalizeMode(request.mode()), fetchClient);
+        FetchTransport fetchTransport = fetchTransportFor(request.useProxy());
+        ParsedPage parsedPage = parsePage(userId, fetchPage(fetchTransport, uri, fetchHintFor(request.useProxy())), uri.toString(), normalizeMode(request.mode()), fetchTransport);
         WebClipDto existingClip = webClipRepository
                 .findFirstByUserIdAndCanonicalUrlOrderByUpdatedAtDesc(userId, canonicalizeUrl(uri))
                 .map(WebClipConvert::toDto)
@@ -142,8 +145,8 @@ public class ClipperService {
         String content = sanitizeContent(request.content());
 
         if (!StringUtils.hasText(title) || !StringUtils.hasText(content)) {
-            HttpClient fetchClient = httpClientFor(request.useProxy());
-            ParsedPage parsedPage = parsePage(userId, fetchPage(fetchClient, uri), uri.toString(), normalizeMode(request.mode()), fetchClient);
+            FetchTransport fetchTransport = fetchTransportFor(request.useProxy());
+            ParsedPage parsedPage = parsePage(userId, fetchPage(fetchTransport, uri, fetchHintFor(request.useProxy())), uri.toString(), normalizeMode(request.mode()), fetchTransport);
             title = StringUtils.hasText(title) ? title : parsedPage.title();
             content = StringUtils.hasText(content) ? content : parsedPage.content();
         }
@@ -346,25 +349,31 @@ public class ClipperService {
         }
     }
 
-    private FetchedPage fetchPage(HttpClient fetchClient, URI uri) {
-        return fetchPage(fetchClient, uri, 0);
+    private FetchedPage fetchPage(FetchTransport fetchTransport, URI uri) {
+        return fetchPage(fetchTransport, uri, 0, "");
     }
 
-    private FetchedPage fetchPage(HttpClient fetchClient, URI uri, int redirectCount) {
-        HttpRequest httpRequest = HttpRequest.newBuilder(uri)
-                .timeout(Duration.ofSeconds(15))
-                .header("Accept", "text/html,text/plain;q=0.9,*/*;q=0.1")
-                .header("Accept-Language", "zh-CN,zh;q=0.9,en;q=0.7")
-                .header("User-Agent", userAgentFor(uri))
-                .GET()
-                .build();
+    private FetchedPage fetchPage(FetchTransport fetchTransport, URI uri, String fetchHint) {
+        return fetchPage(fetchTransport, uri, 0, fetchHint);
+    }
 
-        HttpResponse<byte[]> response;
+    private FetchedPage fetchPage(FetchTransport fetchTransport, URI uri, int redirectCount, String fetchHint) {
+        FetchRequest fetchRequest = new FetchRequest(
+                uri,
+                Duration.ofSeconds(15),
+                List.of(
+                        new FetchHeader("Accept", "text/html,text/plain;q=0.9,*/*;q=0.1"),
+                        new FetchHeader("Accept-Language", "zh-CN,zh;q=0.9,en;q=0.7"),
+                        new FetchHeader("User-Agent", userAgentFor(uri))
+                )
+        );
+
+        FetchResponse response;
 
         try {
-            response = fetchClient.send(httpRequest, HttpResponse.BodyHandlers.ofByteArray());
+            response = fetchTransport.get(fetchRequest);
         } catch (IOException exception) {
-            throw new ResponseStatusException(HttpStatus.BAD_GATEWAY, "网页抓取失败：" + describeException(exception), exception);
+            throw new ResponseStatusException(HttpStatus.BAD_GATEWAY, "网页抓取失败：" + describeException(exception) + refreshProxyFailureHint(fetchHint), exception);
         } catch (InterruptedException exception) {
             Thread.currentThread().interrupt();
             throw new ResponseStatusException(HttpStatus.BAD_GATEWAY, "网页抓取被中断");
@@ -375,10 +384,10 @@ public class ClipperService {
                 throw new ResponseStatusException(HttpStatus.BAD_GATEWAY, "网页重定向次数过多");
             }
 
-            String location = response.headers().firstValue("location")
+            String location = response.firstHeader("location")
                     .orElseThrow(() -> new ResponseStatusException(HttpStatus.BAD_GATEWAY, "网页重定向缺少 Location"));
             URI nextUri = parseAndValidateUri(uri.resolve(location).toString());
-            return fetchPage(fetchClient, nextUri, redirectCount + 1);
+            return fetchPage(fetchTransport, nextUri, redirectCount + 1, fetchHint);
         }
 
         if (response.statusCode() < 200 || response.statusCode() >= 300) {
@@ -391,7 +400,7 @@ public class ClipperService {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "网页内容过大，暂不支持剪藏超过 12MB 的原始页面");
         }
 
-        String contentType = response.headers().firstValue("content-type").orElse("text/html");
+        String contentType = response.firstHeader("content-type").orElse("text/html");
         String normalizedContentType = contentType.toLowerCase(Locale.ROOT);
 
         if (!normalizedContentType.contains("text/html") && !normalizedContentType.startsWith("text/plain")) {
@@ -425,7 +434,7 @@ public class ClipperService {
         return StandardCharsets.UTF_8;
     }
 
-    private ParsedPage parsePage(String userId, FetchedPage page, String requestedUrl, String mode, HttpClient fetchClient) {
+    private ParsedPage parsePage(String userId, FetchedPage page, String requestedUrl, String mode, FetchTransport fetchTransport) {
         if (page.contentType().toLowerCase(Locale.ROOT).startsWith("text/plain")) {
             String title = titleFromUrl(requestedUrl);
             String content = toMarkdown(title, requestedUrl, truncate(page.html().trim(), MAX_CONTENT_CHARS));
@@ -438,7 +447,7 @@ public class ClipperService {
         String title = extractTitle(document, requestedUrl);
         String siteName = extractSiteName(document, requestedUrl);
         Element contentElement = "full".equalsIgnoreCase(mode) ? document.body() : findMainContent(document);
-        ImageLocalizeContext imageContext = new ImageLocalizeContext(userId, page.url(), fetchClient);
+        ImageLocalizeContext imageContext = new ImageLocalizeContext(userId, page.url(), fetchTransport);
         String contentMarkdown = markdownFromElement(contentElement, imageContext);
         String coverImage = localizeImage(imageContext, extractCoverImage(document));
         String markdown = toMarkdown(title, requestedUrl, prependCoverImage(contentMarkdown, coverImage));
@@ -953,23 +962,25 @@ public class ClipperService {
             return imageUrl;
         }
 
-        HttpRequest imageRequest = HttpRequest.newBuilder(imageUri)
-                .timeout(Duration.ofSeconds(12))
-                .header("Accept", "image/avif,image/webp,image/png,image/jpeg,image/gif,image/svg+xml,image/*;q=0.8,*/*;q=0.1")
-                .header("Accept-Language", "zh-CN,zh;q=0.9,en;q=0.7")
-                .header("User-Agent", userAgentFor(imageUri))
-                .header("Referer", context.pageUrl)
-                .GET()
-                .build();
+        FetchRequest imageRequest = new FetchRequest(
+                imageUri,
+                Duration.ofSeconds(12),
+                List.of(
+                        new FetchHeader("Accept", "image/avif,image/webp,image/png,image/jpeg,image/gif,image/svg+xml,image/*;q=0.8,*/*;q=0.1"),
+                        new FetchHeader("Accept-Language", "zh-CN,zh;q=0.9,en;q=0.7"),
+                        new FetchHeader("User-Agent", userAgentFor(imageUri)),
+                        new FetchHeader("Referer", context.pageUrl)
+                )
+        );
 
         try {
-            HttpResponse<byte[]> response = context.httpClient.send(imageRequest, HttpResponse.BodyHandlers.ofByteArray());
+            FetchResponse response = context.fetchTransport.get(imageRequest);
 
             if (response.statusCode() < 200 || response.statusCode() >= 300 || response.body().length > MAX_IMAGE_BYTES) {
                 return imageUrl;
             }
 
-            String contentType = response.headers().firstValue("content-type").orElse("application/octet-stream");
+            String contentType = response.firstHeader("content-type").orElse("application/octet-stream");
 
             if (!isImageResponse(contentType, imageUri)) {
                 return imageUrl;
@@ -1206,13 +1217,32 @@ public class ClipperService {
         return StringUtils.hasText(mode) ? mode : "auto";
     }
 
-    private HttpClient httpClientFor(Boolean useProxy) {
+    private FetchTransport fetchTransportFor(Boolean useProxy) {
         if (!Boolean.TRUE.equals(useProxy)) {
-            return httpClient;
+            return new HttpClientFetchTransport(httpClient);
         }
 
-        return proxyConfigService.createClipperProxyClient()
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.BAD_REQUEST, "请先配置剪藏代理"));
+        return proxyConfigService.createClipperSocketProxy()
+                .<FetchTransport>map(SocksFetchTransport::new)
+                .orElseGet(() -> new HttpClientFetchTransport(proxyConfigService.createClipperProxyClient()
+                        .orElseThrow(() -> new ResponseStatusException(HttpStatus.BAD_REQUEST, "请先配置剪藏代理"))));
+    }
+
+    private String fetchHintFor(Boolean useProxy) {
+        if (!Boolean.TRUE.equals(useProxy)) {
+            return "。当前未使用剪藏代理；如果目标网站无法从服务器直连，请勾选“使用代理抓取”。";
+        }
+
+        String proxyHint = proxyConfigService.currentProxyHint();
+        return StringUtils.hasText(proxyHint) ? proxyHint : "。当前已勾选“使用代理抓取”。";
+    }
+
+    private String refreshProxyFailureHint(String fetchHint) {
+        if (fetchHint.contains("当前剪藏代理")) {
+            return proxyConfigService.currentProxyFailureHint();
+        }
+
+        return fetchHint;
     }
 
     private String normalizeTarget(String target) {
@@ -1235,17 +1265,94 @@ public class ClipperService {
     private record ParsedPage(String title, String content, String excerpt, String siteName, String contentType) {
     }
 
+    private record FetchHeader(String name, String value) {
+    }
+
+    private record FetchRequest(URI uri, Duration timeout, List<FetchHeader> headers) {
+    }
+
+    private record FetchResponse(int statusCode, byte[] body, java.util.Map<String, List<String>> headers) {
+
+        private Optional<String> firstHeader(String name) {
+            for (java.util.Map.Entry<String, List<String>> entry : headers.entrySet()) {
+                if (entry.getKey() != null && entry.getKey().equalsIgnoreCase(name) && !entry.getValue().isEmpty()) {
+                    return Optional.ofNullable(entry.getValue().getFirst());
+                }
+            }
+
+            return Optional.empty();
+        }
+    }
+
+    private interface FetchTransport {
+
+        FetchResponse get(FetchRequest request) throws IOException, InterruptedException;
+    }
+
+    private static class HttpClientFetchTransport implements FetchTransport {
+
+        private final HttpClient httpClient;
+
+        private HttpClientFetchTransport(HttpClient httpClient) {
+            this.httpClient = httpClient;
+        }
+
+        @Override
+        public FetchResponse get(FetchRequest request) throws IOException, InterruptedException {
+            HttpRequest.Builder builder = HttpRequest.newBuilder(request.uri())
+                    .timeout(request.timeout())
+                    .GET();
+            request.headers().forEach(header -> builder.header(header.name(), header.value()));
+            HttpResponse<byte[]> response = httpClient.send(builder.build(), HttpResponse.BodyHandlers.ofByteArray());
+            return new FetchResponse(response.statusCode(), response.body(), response.headers().map());
+        }
+    }
+
+    private static class SocksFetchTransport implements FetchTransport {
+
+        private final Proxy proxy;
+
+        private SocksFetchTransport(Proxy proxy) {
+            this.proxy = proxy;
+        }
+
+        @Override
+        public FetchResponse get(FetchRequest request) throws IOException {
+            URLConnection connection = request.uri().toURL().openConnection(proxy);
+            int timeoutMillis = Math.toIntExact(request.timeout().toMillis());
+            connection.setConnectTimeout(timeoutMillis);
+            connection.setReadTimeout(timeoutMillis);
+            request.headers().forEach(header -> connection.setRequestProperty(header.name(), header.value()));
+
+            if (!(connection instanceof HttpURLConnection httpConnection)) {
+                throw new IOException("仅支持 HTTP/HTTPS URL");
+            }
+
+            httpConnection.setInstanceFollowRedirects(false);
+            int statusCode = httpConnection.getResponseCode();
+            byte[] body;
+
+            try (var inputStream = statusCode >= 400 ? httpConnection.getErrorStream() : httpConnection.getInputStream()) {
+                body = inputStream == null ? new byte[0] : inputStream.readAllBytes();
+            } finally {
+                httpConnection.disconnect();
+            }
+
+            return new FetchResponse(statusCode, body, httpConnection.getHeaderFields());
+        }
+    }
+
     private static class ImageLocalizeContext {
 
         private final String userId;
         private final String pageUrl;
-        private final HttpClient httpClient;
+        private final FetchTransport fetchTransport;
         private int downloadedImages;
 
-        private ImageLocalizeContext(String userId, String pageUrl, HttpClient httpClient) {
+        private ImageLocalizeContext(String userId, String pageUrl, FetchTransport fetchTransport) {
             this.userId = userId;
             this.pageUrl = pageUrl;
-            this.httpClient = httpClient;
+            this.fetchTransport = fetchTransport;
         }
     }
 }

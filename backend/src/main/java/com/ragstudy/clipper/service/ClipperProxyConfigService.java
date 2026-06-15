@@ -16,11 +16,14 @@ import java.net.InetSocketAddress;
 import java.net.PasswordAuthentication;
 import java.net.Proxy;
 import java.net.ProxySelector;
+import java.net.Socket;
 import java.net.SocketAddress;
 import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
@@ -69,6 +72,7 @@ public class ClipperProxyConfigService {
 
     public void testConfig(ClipperProxyConfigRequest request) {
         ClipperProxyConfigEntity config = fromRequestForTest(request);
+        rejectLoopbackProxyInContainer(config);
         HttpClient client = createHttpClient(config);
         HttpRequest httpRequest = HttpRequest.newBuilder(URI.create(TEST_URL))
                 .timeout(Duration.ofSeconds(12))
@@ -82,7 +86,7 @@ public class ClipperProxyConfigService {
                 throw new ResponseStatusException(HttpStatus.BAD_GATEWAY, "代理测试返回状态码：" + response.statusCode());
             }
         } catch (IOException exception) {
-            throw new ResponseStatusException(HttpStatus.BAD_GATEWAY, "代理连接测试失败：" + describeException(exception), exception);
+            throw new ResponseStatusException(HttpStatus.BAD_GATEWAY, "代理连接测试失败：" + describeException(exception) + buildProxyHint(config), exception);
         } catch (InterruptedException exception) {
             Thread.currentThread().interrupt();
             throw new ResponseStatusException(HttpStatus.BAD_GATEWAY, "代理连接测试被中断");
@@ -91,6 +95,24 @@ public class ClipperProxyConfigService {
 
     public Optional<HttpClient> createClipperProxyClient() {
         return proxyConfigRepository.findById(CONFIG_ID).map(this::createHttpClient);
+    }
+
+    public Optional<Proxy> createClipperSocketProxy() {
+        return proxyConfigRepository.findById(CONFIG_ID)
+                .filter(config -> "SOCKS5".equals(normalizeStoredProtocol(config.getProtocol())))
+                .map(config -> new Proxy(Proxy.Type.SOCKS, new InetSocketAddress(config.getHost(), config.getPort())));
+    }
+
+    public String currentProxyHint() {
+        return proxyConfigRepository.findById(CONFIG_ID)
+                .map(this::buildProxyHint)
+                .orElse("");
+    }
+
+    public String currentProxyFailureHint() {
+        return proxyConfigRepository.findById(CONFIG_ID)
+                .map(config -> buildProxyHint(config) + probeProxyPort(config))
+                .orElse("。当前已勾选“使用代理抓取”，但未读取到剪藏代理配置。");
     }
 
     public HttpClient createHttpClient(ClipperProxyConfigEntity config) {
@@ -148,9 +170,21 @@ public class ClipperProxyConfigService {
         return config;
     }
 
+    private void rejectLoopbackProxyInContainer(ClipperProxyConfigEntity config) {
+        if (!isLikelyContainerEnvironment() || !isLoopbackHost(config.getHost())) {
+            return;
+        }
+
+        throw new ResponseStatusException(
+                HttpStatus.BAD_REQUEST,
+                "后端运行在 Docker 容器内，代理地址不能填 " + config.getHost()
+                        + "。请改填 host.docker.internal，并确认代理软件允许局域网连接。"
+        );
+    }
+
     private ClipperProxyConfigDto toDto(ClipperProxyConfigEntity config) {
         return new ClipperProxyConfigDto(
-                config.getProtocol(),
+                normalizeStoredProtocol(config.getProtocol()),
                 config.getHost(),
                 config.getPort(),
                 Optional.ofNullable(config.getUsername()).orElse(""),
@@ -161,11 +195,24 @@ public class ClipperProxyConfigService {
     private String normalizeProtocol(String protocol) {
         String normalizedProtocol = protocol.trim().toUpperCase(Locale.ROOT);
 
-        if (!"HTTP".equals(normalizedProtocol) && !"HTTPS".equals(normalizedProtocol) && !"SOCKS5".equals(normalizedProtocol)) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "代理协议仅支持 HTTP、HTTPS、SOCKS5");
+        if ("HTTPS".equals(normalizedProtocol)) {
+            return "HTTP";
+        }
+
+        if (!"HTTP".equals(normalizedProtocol) && !"SOCKS5".equals(normalizedProtocol)) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "代理协议仅支持 HTTP、SOCKS5");
         }
 
         return normalizedProtocol;
+    }
+
+    private String normalizeStoredProtocol(String protocol) {
+        if (!StringUtils.hasText(protocol)) {
+            return "HTTP";
+        }
+
+        String normalizedProtocol = protocol.trim().toUpperCase(Locale.ROOT);
+        return "HTTPS".equals(normalizedProtocol) ? "HTTP" : normalizedProtocol;
     }
 
     private String normalizeHost(String host) {
@@ -184,6 +231,43 @@ public class ClipperProxyConfigService {
 
     private String normalizeOptional(String value) {
         return StringUtils.hasText(value) ? value.trim() : "";
+    }
+
+    private String buildProxyHint(ClipperProxyConfigEntity config) {
+        String endpoint = Optional.ofNullable(config.getProtocol()).orElse("HTTP").toUpperCase(Locale.ROOT)
+                + " " + config.getHost() + ":" + config.getPort();
+        String hint = "。当前剪藏代理：" + endpoint + "。请确认代理地址和端口能被后端访问";
+
+        if (isLoopbackHost(config.getHost())) {
+            hint += "；如果后端在 Docker 容器内运行，不要填 " + config.getHost()
+                    + "，请改用 host.docker.internal，并让代理软件监听 0.0.0.0 或允许局域网连接";
+        }
+
+        return hint;
+    }
+
+    private String probeProxyPort(ClipperProxyConfigEntity config) {
+        try (Socket socket = new Socket()) {
+            socket.connect(new InetSocketAddress(config.getHost(), config.getPort()), 3000);
+            return "；后端到该代理端口的 TCP 连接正常，超时更可能发生在代理连接目标网页阶段。"
+                    + "请用同一代理测试目标 URL，或切换为 HTTP 192.168.0.198:7890 再试。";
+        } catch (IOException exception) {
+            return "；后端到该代理端口的 TCP 连接失败：" + describeException(exception)
+                    + "。如果后端运行在 Docker 中，请检查代理软件是否允许来自 Docker 网段的连接，以及防火墙是否放行该端口。";
+        }
+    }
+
+    private boolean isLoopbackHost(String host) {
+        String normalizedHost = Optional.ofNullable(host).orElse("").trim().toLowerCase(Locale.ROOT);
+        return "localhost".equals(normalizedHost)
+                || "127.0.0.1".equals(normalizedHost)
+                || "::1".equals(normalizedHost)
+                || "0:0:0:0:0:0:0:1".equals(normalizedHost);
+    }
+
+    private boolean isLikelyContainerEnvironment() {
+        return Files.exists(Path.of("/.dockerenv"))
+                || StringUtils.hasText(System.getenv("KUBERNETES_SERVICE_HOST"));
     }
 
     private String describeException(Exception exception) {

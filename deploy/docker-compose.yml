@@ -66,6 +66,8 @@ services:
     image: rag-study-backend:latest
     container_name: rag-study-backend
     restart: unless-stopped
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     depends_on:
       postgres:
         condition: service_healthy
