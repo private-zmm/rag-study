@@ -12,6 +12,7 @@ import {
   Paperclip,
   Plus,
   Settings2,
+  Square,
   X,
 } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState, type ChangeEvent } from 'react';
@@ -93,6 +94,15 @@ type ChatPageProps = {
   selectedConversationId?: string;
 };
 
+type PendingChatRequest = {
+  messageContent: string;
+  requestContent: string;
+  modelConfigId: string;
+  knowledgeBaseId?: string;
+  userMessage: ChatMessage;
+  userMessageDisplayed: boolean;
+};
+
 function ChatPage({ newChatVersion, onConversationCreated, selectedConversationId }: ChatPageProps) {
   const [referenceMenuOpen, setReferenceMenuOpen] = useState(false);
   const [referenceMenuView, setReferenceMenuView] = useState<ReferenceMenuView>('main');
@@ -106,6 +116,12 @@ function ChatPage({ newChatVersion, onConversationCreated, selectedConversationI
   const fileInputRef = useRef<HTMLInputElement>(null);
   const streamingCreatedConversationRef = useRef<string | undefined>(undefined);
   const streamWatchdogRef = useRef<number | undefined>(undefined);
+  const activeStreamControllerRef = useRef<AbortController | undefined>(undefined);
+  const pendingChatRequestsRef = useRef<PendingChatRequest[]>([]);
+  const isStreamingResponseRef = useRef(false);
+  const currentConversationIdRef = useRef<string | undefined>(selectedConversationId);
+  const [isStreamingResponse, setIsStreamingResponse] = useState(false);
+  const [pendingChatRequestCount, setPendingChatRequestCount] = useState(0);
   const [currentConversationId, setCurrentConversationId] = useState<string | undefined>(selectedConversationId);
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
   const { data: knowledgeBases } = useApiResource(fetchKnowledgeBases, fallbackKnowledgeBases);
@@ -172,6 +188,12 @@ function ChatPage({ newChatVersion, onConversationCreated, selectedConversationI
     setSelectedReferences([]);
     setReferenceMenuOpen(false);
     setReferenceMenuView('main');
+    pendingChatRequestsRef.current = [];
+    setPendingChatRequestCount(0);
+    activeStreamControllerRef.current?.abort();
+    activeStreamControllerRef.current = undefined;
+    isStreamingResponseRef.current = false;
+    setIsStreamingResponse(false);
   }, [defaultModelConfigId, newChatVersion]);
 
   useEffect(() => {
@@ -200,8 +222,15 @@ function ChatPage({ newChatVersion, onConversationCreated, selectedConversationI
   useEffect(() => {
     return () => {
       window.clearTimeout(streamWatchdogRef.current);
+      activeStreamControllerRef.current?.abort();
+      activeStreamControllerRef.current = undefined;
+      pendingChatRequestsRef.current = [];
     };
   }, []);
+
+  useEffect(() => {
+    currentConversationIdRef.current = currentConversationId;
+  }, [currentConversationId]);
 
   useEffect(() => {
     setOpenNoteFolderKeys(new Set(collectReferenceNoteFolderKeys(noteTree)));
@@ -389,6 +418,20 @@ function ChatPage({ newChatVersion, onConversationCreated, selectedConversationI
     }, 20_000);
   };
 
+  const syncPendingChatRequestCount = () => {
+    setPendingChatRequestCount(pendingChatRequestsRef.current.length);
+  };
+
+  const stopActiveStream = () => {
+    if (!activeStreamControllerRef.current) {
+      return;
+    }
+
+    activeStreamControllerRef.current.abort();
+    activeStreamControllerRef.current = undefined;
+    clearStreamWatchdog();
+  };
+
   const handleSubmitMessage = async (content?: string) => {
     const messageContent = (content ?? inputValue).trim();
 
@@ -423,17 +466,44 @@ function ChatPage({ newChatVersion, onConversationCreated, selectedConversationI
         : undefined,
       references: requestReferences.map(({ id, type, title }) => ({ id, type, title })),
     };
+    const pendingRequest: PendingChatRequest = {
+      messageContent,
+      requestContent,
+      modelConfigId: selectedModelConfigId,
+      knowledgeBaseId: requestKnowledgeBaseId,
+      userMessage,
+      userMessageDisplayed: false,
+    };
+
+    if (isStreamingResponseRef.current) {
+      pendingChatRequestsRef.current.push({ ...pendingRequest, userMessageDisplayed: true });
+      syncPendingChatRequestCount();
+      setChatMessages((currentMessages) => [...currentMessages, userMessage]);
+      return;
+    }
+
+    await runChatRequest(pendingRequest);
+  };
+
+  const runChatRequest = async (request: PendingChatRequest) => {
     const aiMessageId = createClientMessageId();
     const aiMessage: ChatMessage = { id: aiMessageId, role: 'ai', content: '', streamStatus: '正在连接模型...' };
+    const streamController = new AbortController();
 
-    setChatMessages((currentMessages) => [...currentMessages, userMessage, aiMessage]);
+    activeStreamControllerRef.current = streamController;
+    isStreamingResponseRef.current = true;
+    setIsStreamingResponse(true);
+    setChatMessages((currentMessages) =>
+      request.userMessageDisplayed ? [...currentMessages, aiMessage] : [...currentMessages, request.userMessage, aiMessage],
+    );
 
     try {
       armStreamWatchdog(aiMessageId);
-      await streamChatMessage(requestContent, selectedModelConfigId, currentConversationId, requestKnowledgeBaseId, {
+      await streamChatMessage(request.requestContent, request.modelConfigId, currentConversationIdRef.current, request.knowledgeBaseId, streamController.signal, {
         onConversation: (conversationId) => {
           armStreamWatchdog(aiMessageId);
           streamingCreatedConversationRef.current = conversationId;
+          currentConversationIdRef.current = conversationId;
           setCurrentConversationId(conversationId);
           onConversationCreated(conversationId);
         },
@@ -469,12 +539,41 @@ function ChatPage({ newChatVersion, onConversationCreated, selectedConversationI
         },
       });
       clearStreamWatchdog();
-    } catch {
+    } catch (error) {
       clearStreamWatchdog();
+      if (isAbortError(error)) {
+        setChatMessages((currentMessages) =>
+          currentMessages.map((messageItem) => {
+            if (messageItem.id !== aiMessageId) {
+              return messageItem;
+            }
+
+            return messageItem.content.trim()
+              ? { ...messageItem, streamStatus: '已停止生成' }
+              : { ...messageItem, content: '已停止生成。', streamStatus: undefined };
+          }),
+        );
+        return;
+      }
+
       setChatMessages((currentMessages) => [
         ...currentMessages.filter((messageItem) => messageItem.id !== aiMessageId),
         { id: aiMessageId, role: 'ai', content: '后端暂时没有连接成功，先确认 Spring Boot 是否运行在 8080 端口。' },
       ]);
+    } finally {
+      if (activeStreamControllerRef.current === streamController) {
+        activeStreamControllerRef.current = undefined;
+      }
+
+      isStreamingResponseRef.current = false;
+      setIsStreamingResponse(false);
+
+      const nextRequest = pendingChatRequestsRef.current.shift();
+      syncPendingChatRequestCount();
+
+      if (nextRequest) {
+        void runChatRequest(nextRequest);
+      }
     }
   };
 
@@ -689,6 +788,17 @@ function ChatPage({ newChatVersion, onConversationCreated, selectedConversationI
                 )
               }
             />
+            {isStreamingResponse || pendingChatRequestCount > 0 ? (
+              <div className="chat-generation-control">
+                <Typography.Text type="secondary">
+                  {isStreamingResponse ? '正在回答' : '等待回答'}
+                  {pendingChatRequestCount > 0 ? `，已排队 ${pendingChatRequestCount} 条补充` : ''}
+                </Typography.Text>
+                <Button danger size="small" disabled={!isStreamingResponse} icon={<Square size={13} />} onClick={stopActiveStream}>
+                  停止生成
+                </Button>
+              </div>
+            ) : null}
             <Sender
               placeholder="输入消息"
               value={inputValue}
@@ -833,6 +943,7 @@ function AssistantChatMessage({
   return (
     <div className="assistant-chat-message">
       {content ? <VditorPreviewMessage content={content} /> : <WaitingMessage status={streamStatus} />}
+      {content && streamStatus ? <div className="assistant-stream-status">{streamStatus}</div> : null}
       {suggestedQuestions?.length ? (
         <div className="follow-up-suggestions" aria-label="追问建议">
           <div className="follow-up-title">追问</div>
@@ -850,6 +961,10 @@ function AssistantChatMessage({
       ) : null}
     </div>
   );
+}
+
+function isAbortError(error: unknown) {
+  return error instanceof DOMException && error.name === 'AbortError';
 }
 
 function WaitingMessage({ status }: { status?: string }) {

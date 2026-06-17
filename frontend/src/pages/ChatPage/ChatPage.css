@@ -113,6 +113,12 @@
   font-size: 14px;
 }
 
+.assistant-stream-status {
+  margin-top: 8px;
+  color: #8b8f96;
+  font-size: 13px;
+}
+
 .assistant-waiting-dots {
   display: inline-flex;
   gap: 4px;
@@ -247,6 +253,15 @@
 
 .conversation-sender-shell {
   border-radius: 18px;
+}
+
+.chat-generation-control {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+  min-height: 32px;
+  margin: 0 0 8px 44px;
 }
 
 .chat-reference-stack {

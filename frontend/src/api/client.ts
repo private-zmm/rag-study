@@ -334,6 +334,7 @@ export async function streamChatMessage(
   modelConfigId: string,
   conversationId: string | undefined,
   knowledgeBaseId: string | undefined,
+  signal: AbortSignal | undefined,
   handlers: {
     onConversation: (conversationId: string) => void;
     onDelta: (delta: string) => void;
@@ -352,6 +353,7 @@ export async function streamChatMessage(
   const response = await sendRequest(`${API_BASE_URL}/chat/messages/stream`, {
     method: 'POST',
     headers,
+    signal,
     body: JSON.stringify({ content, modelConfigId, conversationId, knowledgeBaseId }),
   });
 
