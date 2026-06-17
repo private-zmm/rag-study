@@ -1,6 +1,6 @@
 import { Bubble, Sender } from '@ant-design/x';
 import { Avatar, Button, Input, Select, Space, Typography, message } from 'antd';
-import { Paperclip, Plus, Settings2, Square } from 'lucide-react';
+import { ArrowUp, Paperclip, Plus, Settings2, Square } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState, type ChangeEvent } from 'react';
 import {
   fetchChatConversations,
@@ -564,24 +564,43 @@ function ChatPage({ newChatVersion, onConversationCreated, selectedConversationI
                 )
               }
             />
-            <Button
-              className="new-chat-plus-button"
-              type={referenceMenuOpen ? 'primary' : 'text'}
-              shape="circle"
-              icon={<Plus size={18} />}
-              onClick={() => {
-                setReferenceMenuOpen((open) => !open);
-                setReferenceMenuView('main');
-              }}
-            />
-            <Input
+            <Input.TextArea
               className="new-chat-text-input"
               variant="borderless"
               placeholder="有问题，尽管问"
               value={inputValue}
+              autoSize={{ minRows: 1, maxRows: 6 }}
               onChange={(event) => setInputValue(event.target.value)}
-              onPressEnter={() => void handleSubmitMessage()}
+              onKeyDown={(event) => {
+                if (event.key !== 'Enter' || event.shiftKey || event.nativeEvent.isComposing) {
+                  return;
+                }
+
+                event.preventDefault();
+                void handleSubmitMessage();
+              }}
             />
+            <div className="new-chat-toolbar">
+              <Button
+                className="new-chat-plus-button"
+                type={referenceMenuOpen ? 'primary' : 'text'}
+                shape="circle"
+                icon={<Plus size={22} strokeWidth={1.8} />}
+                onClick={() => {
+                  setReferenceMenuOpen((open) => !open);
+                  setReferenceMenuView('main');
+                }}
+              />
+              <Button
+                aria-label="发送消息"
+                className="new-chat-send-button"
+                type="primary"
+                shape="circle"
+                disabled={!inputValue.trim()}
+                icon={<ArrowUp size={18} strokeWidth={2.2} />}
+                onClick={() => void handleSubmitMessage()}
+              />
+            </div>
           </div>
         ) : (
           <div className="conversation-sender-shell">
