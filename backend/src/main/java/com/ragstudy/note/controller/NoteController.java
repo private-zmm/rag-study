@@ -4,6 +4,7 @@ import com.ragstudy.auth.service.AuthService;
 import com.ragstudy.auth.dal.dataobject.UserEntity;
 import com.ragstudy.common.ApiResponse;
 import com.ragstudy.note.controller.dto.NoteDto;
+import com.ragstudy.note.controller.dto.NoteExportRequest;
 import com.ragstudy.note.controller.dto.NoteImportRequest;
 import com.ragstudy.note.controller.dto.NoteKnowledgeSyncRequest;
 import com.ragstudy.note.controller.dto.NoteKnowledgeSyncResponse;
@@ -13,6 +14,8 @@ import com.ragstudy.note.controller.dto.NoteSaveRequest;
 import com.ragstudy.note.service.NoteKnowledgeSyncService;
 import com.ragstudy.note.service.NoteService;
 import jakarta.validation.Valid;
+import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
@@ -64,6 +67,20 @@ public class NoteController {
     ) {
         UserEntity user = authService.requireUser(authorizationHeader);
         return ApiResponse.ok(noteService.importNotes(user.getId(), request));
+    }
+
+    @PostMapping(value = "/export", produces = "application/zip")
+    public ResponseEntity<byte[]> exportNotes(
+            @RequestHeader(value = "Authorization", required = false) String authorizationHeader,
+            @RequestBody(required = false) NoteExportRequest request
+    ) {
+        UserEntity user = authService.requireUser(authorizationHeader);
+        NoteService.NoteExportFile exportFile = noteService.exportNotes(user.getId(), request);
+
+        return ResponseEntity.ok()
+                .headers(exportFile.headers())
+                .contentType(MediaType.parseMediaType("application/zip"))
+                .body(exportFile.content());
     }
 
     @PostMapping("/sync-to-knowledge")

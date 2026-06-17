@@ -26,6 +26,7 @@ import {
   createNoteFolder,
   deleteNote,
   deleteNoteFolder,
+  exportNotesArchive,
   fetchNoteKnowledgeSyncTask,
   fetchKnowledgeBases,
   fetchNoteFolders,
@@ -108,6 +109,7 @@ function NotesPage({ selectedNoteId }: NotesPageProps) {
   const [renameInputPlacement, setRenameInputPlacement] = useState<'tree' | 'title'>('tree');
   const [saving, setSaving] = useState(false);
   const [importing, setImporting] = useState(false);
+  const [exporting, setExporting] = useState(false);
   const [syncingKnowledge, setSyncingKnowledge] = useState(false);
   const [editorReady, setEditorReady] = useState(false);
   const editorRef = useRef<Vditor | null>(null);
@@ -502,6 +504,38 @@ function NotesPage({ selectedNoteId }: NotesPageProps) {
     });
   };
 
+  const exportNotes = async (payload: { noteIds?: string[]; folderPath?: string }, emptyMessage: string) => {
+    const targetNoteCount = payload.noteIds?.length ?? notes.length;
+
+    if (targetNoteCount === 0) {
+      message.info(emptyMessage);
+      return;
+    }
+
+    setExporting(true);
+
+    try {
+      await saveActiveNoteBeforeExport();
+      const exportedArchive = await exportNotesArchive(payload);
+
+      downloadBlob(exportedArchive.blob, exportedArchive.fileName);
+      message.success({ content: '笔记导出已开始下载', key: noteFeedbackMessageKey });
+    } catch (error) {
+      message.error(error instanceof Error ? error.message : '导出失败，先检查后端是否启动');
+    } finally {
+      setExporting(false);
+    }
+  };
+
+  const saveActiveNoteBeforeExport = async () => {
+    if (!activeNote) {
+      return;
+    }
+
+    const savedNote = await saveNote(activeNote);
+    setNotes((currentNotes) => currentNotes.map((note) => (note.id === savedNote.id ? savedNote : note)));
+  };
+
   const deleteNotesByIds = async (noteIds: string[], successMessage: string) => {
     if (noteIds.length === 0) {
       return;
@@ -608,6 +642,7 @@ function NotesPage({ selectedNoteId }: NotesPageProps) {
     if (key === 'new-folder') {
       void handleCreateFolder();
     }
+
   };
 
   const toggleFolderNode = (folderKey: string) => {
@@ -664,6 +699,10 @@ function NotesPage({ selectedNoteId }: NotesPageProps) {
                     if (info.key === 'sync-knowledge') {
                       openSyncToKnowledgeModal(collectNotesFromTree(node.children), node.name);
                     }
+
+                    if (info.key === 'export') {
+                      void exportNotes({ folderPath: getFolderPathFromKey(node.key) }, '这个文件夹里没有可导出的笔记');
+                    }
                   },
                 }}
                 trigger={['click']}
@@ -673,7 +712,7 @@ function NotesPage({ selectedNoteId }: NotesPageProps) {
                   type="text"
                   shape="circle"
                   icon={<Plus size={14} />}
-                  loading={importing || syncingKnowledge}
+                  loading={importing || exporting || syncingKnowledge}
                   onClick={(event) => event.stopPropagation()}
                 />
               </Dropdown>
@@ -744,6 +783,10 @@ function NotesPage({ selectedNoteId }: NotesPageProps) {
                 if (info.key === 'sync-knowledge') {
                   openSyncToKnowledgeModal([node.note], getNoteDisplayName(node.note));
                 }
+
+                if (info.key === 'export') {
+                  void exportNotes({ noteIds: [node.note.id] }, '没有可导出的笔记');
+                }
               },
             }}
             trigger={['click']}
@@ -753,7 +796,7 @@ function NotesPage({ selectedNoteId }: NotesPageProps) {
               type="text"
               shape="circle"
               icon={<Plus size={14} />}
-              loading={importing || syncingKnowledge}
+              loading={importing || exporting || syncingKnowledge}
               onClick={(event) => event.stopPropagation()}
             />
           </Dropdown>
@@ -778,10 +821,19 @@ function NotesPage({ selectedNoteId }: NotesPageProps) {
             <Button type="text" size="small" icon={<LocateFixed size={15} />} onClick={locateActiveNote} />
             <Dropdown
               classNames={{ root: 'note-actions-dropdown' }}
-              menu={{ items: noteActionItems, onClick: handleNoteActionClick }}
+              menu={{
+                items: noteActionItems,
+                onClick: (info) => {
+                  handleNoteActionClick(info);
+
+                  if (info.key === 'export') {
+                    void exportNotes({}, '没有可导出的笔记');
+                  }
+                },
+              }}
               trigger={['click']}
             >
-              <Button type="text" size="small" icon={<Plus size={14} />} loading={importing || syncingKnowledge} />
+              <Button type="text" size="small" icon={<Plus size={14} />} loading={importing || exporting || syncingKnowledge} />
             </Dropdown>
           </div>
           <div className="notes-tree" aria-label="笔记目录" role="tree">
@@ -809,7 +861,7 @@ function NotesPage({ selectedNoteId }: NotesPageProps) {
                 <Button type="primary" icon={<FilePlus2 size={15} />} loading={saving} onClick={() => void handleCreateNote()}>
                   新建笔记
                 </Button>
-                <Button icon={<Upload size={15} />} loading={importing || syncingKnowledge} onClick={() => void openFolderImport()}>
+                <Button icon={<Upload size={15} />} loading={importing || exporting || syncingKnowledge} onClick={() => void openFolderImport()}>
                   导入文件夹
                 </Button>
               </div>
@@ -1060,6 +1112,10 @@ function getFolderAncestorKeys(folderKey: string) {
   }, []);
 }
 
+function getFolderPathFromKey(folderKey: string) {
+  return folderKey.replace(/^root\/?/, '');
+}
+
 function collectNotesFromTree(nodes: NoteTreeNode[]) {
   const collectedNotes: Note[] = [];
 
@@ -1073,6 +1129,19 @@ function collectNotesFromTree(nodes: NoteTreeNode[]) {
   });
 
   return collectedNotes;
+}
+
+function downloadBlob(blob: Blob, fileName: string) {
+  const objectUrl = window.URL.createObjectURL(blob);
+  const anchor = document.createElement('a');
+
+  anchor.href = objectUrl;
+  anchor.download = fileName;
+  anchor.style.display = 'none';
+  document.body.appendChild(anchor);
+  anchor.click();
+  anchor.remove();
+  window.URL.revokeObjectURL(objectUrl);
 }
 
 function wait(duration: number) {

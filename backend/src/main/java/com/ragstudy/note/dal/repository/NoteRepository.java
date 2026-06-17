@@ -13,6 +13,8 @@ public interface NoteRepository extends JpaRepository<NoteEntity, String> {
 
     List<NoteEntity> findAllByUserIdOrderByUpdatedAtDesc(String userId);
 
+    List<NoteEntity> findAllByIdInAndUserId(List<String> ids, String userId);
+
     Optional<NoteEntity> findByIdAndUserId(String id, String userId);
 
     @Query("""

@@ -62,6 +62,25 @@ async function readErrorMessage(response: Response) {
   }
 }
 
+function readDownloadFileName(contentDisposition: string | null) {
+  if (!contentDisposition) {
+    return undefined;
+  }
+
+  const encodedFileNameMatch = contentDisposition.match(/filename\*=UTF-8''([^;]+)/i);
+
+  if (encodedFileNameMatch) {
+    try {
+      return decodeURIComponent(encodedFileNameMatch[1]);
+    } catch {
+      return encodedFileNameMatch[1];
+    }
+  }
+
+  const fileNameMatch = contentDisposition.match(/filename="?([^";]+)"?/i);
+  return fileNameMatch?.[1];
+}
+
 export function register(payload: { username: string; email: string; password: string; nickname?: string }) {
   return request<AuthSession>('/auth/register', {
     method: 'POST',
@@ -84,6 +103,37 @@ export function fetchCurrentUser() {
 
 export function fetchNotes() {
   return request<Note[]>('/notes');
+}
+
+export async function exportNotesArchive(payload: { noteIds?: string[]; folderPath?: string }) {
+  const token = getStoredSession()?.token;
+  const headers = new Headers();
+  headers.set('Content-Type', 'application/json');
+
+  if (token) {
+    headers.set('Authorization', `Bearer ${token}`);
+  }
+
+  const response = await sendRequest(`${API_BASE_URL}/notes/export`, {
+    method: 'POST',
+    headers,
+    body: JSON.stringify(payload),
+  });
+
+  if (!response.ok) {
+    const errorText = await readErrorMessage(response);
+
+    if (response.status === 401) {
+      notifySessionExpired();
+    }
+
+    throw new Error(errorText || `API request failed: ${response.status}`);
+  }
+
+  return {
+    blob: await response.blob(),
+    fileName: readDownloadFileName(response.headers.get('Content-Disposition')) ?? 'notes.zip',
+  };
 }
 
 export function fetchNoteFolders() {
