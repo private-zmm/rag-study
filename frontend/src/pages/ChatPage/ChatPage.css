@@ -272,7 +272,10 @@
 .new-chat-send-button {
   grid-column: 3;
   width: 34px;
+  min-width: 34px;
   height: 34px;
+  aspect-ratio: 1;
+  padding: 0 !important;
 }
 
 .new-chat-send-button:disabled {
