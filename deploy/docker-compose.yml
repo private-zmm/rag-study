@@ -10,7 +10,7 @@ services:
       POSTGRES_USER: ${POSTGRES_USER:-postgres}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-change-me}
     ports:
-      - "${POSTGRES_PORT:-15432}:5432"
+      - "${APP_POSTGRES_PORT:-15432}:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
@@ -28,23 +28,29 @@ services:
       MINIO_ROOT_USER: ${MINIO_ROOT_USER:-minioadmin}
       MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-change-me-minio}
     ports:
-      - "${MINIO_API_PORT:-19000}:9000"
-      - "${MINIO_CONSOLE_PORT:-19001}:9001"
+      - "${APP_MINIO_API_PORT:-19000}:9000"
+      - "${APP_MINIO_CONSOLE_PORT:-19001}:9001"
     volumes:
       - minio_data:/data
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
 
   minio-init:
     image: minio/mc:RELEASE.2025-04-16T18-13-26Z
     container_name: rag-study-minio-init
     depends_on:
-      - minio
+      minio:
+        condition: service_healthy
     environment:
       MINIO_ROOT_USER: ${MINIO_ROOT_USER:-minioadmin}
       MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-change-me-minio}
       APP_MINIO_BUCKET: ${APP_MINIO_BUCKET:-rag-study}
     entrypoint: >
       /bin/sh -c "
-      until mc alias set local http://minio:9000 $${MINIO_ROOT_USER} $${MINIO_ROOT_PASSWORD}; do sleep 2; done;
+      mc alias set local http://minio:9000 $${MINIO_ROOT_USER} $${MINIO_ROOT_PASSWORD};
       mc mb --ignore-existing local/$${APP_MINIO_BUCKET};
       "
     restart: "no"
@@ -54,10 +60,15 @@ services:
     container_name: rag-study-qdrant
     restart: unless-stopped
     ports:
-      - "${QDRANT_HTTP_PORT:-16333}:6333"
-      - "${QDRANT_GRPC_PORT:-16334}:6334"
+      - "${APP_QDRANT_HTTP_PORT:-16333}:6333"
+      - "${APP_QDRANT_GRPC_PORT:-16334}:6334"
     volumes:
       - qdrant_data:/qdrant/storage
+    healthcheck:
+      test: ["CMD-SHELL", "bash -c '</dev/tcp/127.0.0.1/6333'"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
 
   backend:
     build:
@@ -71,12 +82,10 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
-      minio:
-        condition: service_started
       minio-init:
-        condition: service_started
+        condition: service_completed_successfully
       qdrant:
-        condition: service_started
+        condition: service_healthy
     environment:
       TZ: ${TZ:-Asia/Shanghai}
       JAVA_TOOL_OPTIONS: ${JAVA_TOOL_OPTIONS:--Duser.timezone=Asia/Shanghai}
@@ -90,6 +99,7 @@ services:
       MINIO_ACCESS_KEY: ${MINIO_ROOT_USER:-minioadmin}
       MINIO_SECRET_KEY: ${MINIO_ROOT_PASSWORD:-change-me-minio}
       QDRANT_URL: http://qdrant:6333
+      QDRANT_GRPC_PORT: 6334
       QDRANT_COLLECTION: ${QDRANT_COLLECTION:-rag_study_chunks_text_embedding_v4}
       QDRANT_VECTOR_SIZE: ${QDRANT_VECTOR_SIZE:-1024}
       AI_BASE_URL: ${AI_BASE_URL:-}
@@ -99,7 +109,7 @@ services:
       AI_SYSTEM_PROMPT: ${AI_SYSTEM_PROMPT:-你是一个面向学习、笔记和知识库整理的中文助手。回答要清晰、准确、简洁。如果有markdown文档回答要是标准格式。}
       BACKUP_TIME_ZONE: ${BACKUP_TIME_ZONE:-Asia/Shanghai}
     ports:
-      - "${BACKEND_PORT:-18080}:8080"
+      - "${APP_BACKEND_PORT:-18080}:8080"
 
   frontend:
     build:
@@ -111,7 +121,7 @@ services:
     depends_on:
       - backend
     ports:
-      - "${FRONTEND_PORT:-18000}:80"
+      - "${APP_FRONTEND_PORT:-18000}:80"
 
 volumes:
   postgres_data:
