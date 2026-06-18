@@ -179,6 +179,34 @@ public class KnowledgeDocumentService {
     }
 
     @Transactional
+    public KnowledgeDocumentDto saveVideoDocument(
+            String userId,
+            String knowledgeBaseId,
+            String url,
+            String platform,
+            String title,
+            String rawContent
+    ) {
+        KnowledgeBaseEntity knowledgeBase = requireOwnedKnowledgeBase(userId, knowledgeBaseId);
+        KnowledgeDocumentEntity document = createParsedDocument(
+                knowledgeBaseId,
+                userId,
+                title.trim(),
+                "video",
+                url,
+                null,
+                "text/markdown",
+                platform,
+                rawContent.trim()
+        );
+
+        KnowledgeDocumentEntity savedDocument = documentRepository.save(document);
+        chunkService.rebuildChunks(savedDocument);
+        refreshKnowledgeBaseStats(knowledgeBase);
+        return toDto(savedDocument);
+    }
+
+    @Transactional
     public KnowledgeDocumentDto uploadDocument(String userId, String knowledgeBaseId, MultipartFile file) {
         if (file == null || file.isEmpty()) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "请选择要上传的文件");

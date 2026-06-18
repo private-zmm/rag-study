@@ -6,8 +6,11 @@ import com.ragstudy.clipper.controller.dto.ClipperPreviewDto;
 import com.ragstudy.clipper.controller.dto.ClipperPreviewRequest;
 import com.ragstudy.clipper.controller.dto.ClipperRequest;
 import com.ragstudy.clipper.controller.dto.ClipperResultDto;
+import com.ragstudy.clipper.controller.dto.ClipperVideoTaskDto;
+import com.ragstudy.clipper.controller.dto.ClipperVideoTaskRequest;
 import com.ragstudy.clipper.controller.dto.WebClipDto;
 import com.ragstudy.clipper.service.ClipperService;
+import com.ragstudy.clipper.service.ClipperVideoTaskService;
 import com.ragstudy.common.ApiResponse;
 import jakarta.validation.Valid;
 import org.springframework.web.bind.annotation.DeleteMapping;
@@ -27,10 +30,16 @@ import java.util.List;
 public class ClipperController {
 
     private final ClipperService clipperService;
+    private final ClipperVideoTaskService clipperVideoTaskService;
     private final AuthService authService;
 
-    public ClipperController(ClipperService clipperService, AuthService authService) {
+    public ClipperController(
+            ClipperService clipperService,
+            ClipperVideoTaskService clipperVideoTaskService,
+            AuthService authService
+    ) {
         this.clipperService = clipperService;
+        this.clipperVideoTaskService = clipperVideoTaskService;
         this.authService = authService;
     }
 
@@ -78,5 +87,23 @@ public class ClipperController {
     ) {
         UserEntity user = authService.requireUser(authorizationHeader);
         return ApiResponse.ok(clipperService.clip(user.getId(), request));
+    }
+
+    @PostMapping("/video-tasks")
+    public ApiResponse<ClipperVideoTaskDto> createVideoTask(
+            @RequestHeader(value = "Authorization", required = false) String authorizationHeader,
+            @Valid @RequestBody ClipperVideoTaskRequest request
+    ) {
+        UserEntity user = authService.requireUser(authorizationHeader);
+        return ApiResponse.ok(clipperVideoTaskService.createTask(user.getId(), request));
+    }
+
+    @GetMapping("/video-tasks/{taskId}")
+    public ApiResponse<ClipperVideoTaskDto> getVideoTask(
+            @RequestHeader(value = "Authorization", required = false) String authorizationHeader,
+            @PathVariable String taskId
+    ) {
+        UserEntity user = authService.requireUser(authorizationHeader);
+        return ApiResponse.ok(clipperVideoTaskService.getTask(user.getId(), taskId));
     }
 }

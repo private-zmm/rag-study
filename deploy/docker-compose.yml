@@ -108,8 +108,34 @@ services:
       AI_TEMPERATURE: ${AI_TEMPERATURE:-0.3}
       AI_SYSTEM_PROMPT: ${AI_SYSTEM_PROMPT:-你是一个面向学习、笔记和知识库整理的中文助手。回答要清晰、准确、简洁。如果有markdown文档回答要是标准格式。}
       BACKUP_TIME_ZONE: ${BACKUP_TIME_ZONE:-Asia/Shanghai}
+      SKILL_WORKER_URL: http://skill-worker:8000
     ports:
       - "${APP_BACKEND_PORT:-18080}:8080"
+
+  skill-worker:
+    build:
+      context: ..
+      dockerfile: deploy/skill-worker.Dockerfile
+    image: rag-study-skill-worker:latest
+    container_name: rag-study-skill-worker
+    restart: unless-stopped
+    environment:
+      TZ: ${TZ:-Asia/Shanghai}
+      WHISPER_MODEL_SIZE: ${WHISPER_MODEL_SIZE:-small}
+      SKILL_WORKER_TIMEOUT_SECONDS: ${SKILL_WORKER_TIMEOUT_SECONDS:-1800}
+      SKILL_WORKER_MAX_LOG_CHARS: ${SKILL_WORKER_MAX_LOG_CHARS:-20000}
+      SKILL_WORKER_MAX_RESULT_BYTES: ${SKILL_WORKER_MAX_RESULT_BYTES:-5242880}
+    ports:
+      - "${APP_SKILL_WORKER_PORT:-18081}:8000"
+    volumes:
+      - skill_worker_cache:/home/worker/.cache
+    tmpfs:
+      - /tmp:size=4g,exec
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    pids_limit: 512
 
   frontend:
     build:
@@ -127,3 +153,4 @@ volumes:
   postgres_data:
   minio_data:
   qdrant_data:
+  skill_worker_cache:
