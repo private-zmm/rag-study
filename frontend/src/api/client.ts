@@ -1,5 +1,5 @@
 import { clearStoredSession, getStoredSession } from '../auth/session';
-import type { AuthSession, BackupConfig, BackupItem, BackupResult, ChatConversation, ChatMessage, ChatModelConfig, ClipperPreview, ClipperProxyConfig, ClipperResult, ClipperVideoTask, EmbeddingModelConfig, GlobalSearchResult, KnowledgeBase, KnowledgeDocument, Note, NoteFolder, NoteKnowledgeSyncTask, PageResult, User, WebClip } from '../types';
+import type { AuthSession, BackupConfig, BackupItem, BackupResult, ChatConversation, ChatMessage, ChatModelConfig, ClipperPreview, ClipperProxyConfig, ClipperResult, EmbeddingModelConfig, GlobalSearchResult, KnowledgeBase, KnowledgeDocument, Note, NoteFolder, NoteKnowledgeSyncTask, PageResult, User, WebClip } from '../types';
 
 type ApiResponse<T> = {
   data: T;
@@ -600,24 +600,6 @@ export function submitClipper(payload: {
     method: 'POST',
     body: JSON.stringify(payload),
   });
-}
-
-export function createClipperVideoTask(payload: {
-  url: string;
-  knowledgeBaseId: string;
-  platform?: string;
-  language?: string;
-  modelSize?: string;
-  keepTimestamps?: boolean;
-}) {
-  return request<ClipperVideoTask>('/clipper/video-tasks', {
-    method: 'POST',
-    body: JSON.stringify(payload),
-  });
-}
-
-export function fetchClipperVideoTask(taskId: string) {
-  return request<ClipperVideoTask>(`/clipper/video-tasks/${taskId}`);
 }
 
 export function fetchClipperProxyConfig() {

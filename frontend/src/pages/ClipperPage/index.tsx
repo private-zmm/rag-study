@@ -1,23 +1,17 @@
-import { Alert, Button, Checkbox, Empty, Form, Input, List, Modal, Radio, Segmented, Select, Space, Statistic, Tooltip, Typography, message } from 'antd';
-import { Clock3, FileText, Globe, Save, Trash2, Video, WandSparkles } from 'lucide-react';
+import { Alert, Button, Checkbox, Empty, Form, Input, List, Modal, Radio, Select, Space, Statistic, Tooltip, Typography, message } from 'antd';
+import { Clock3, FileText, Globe, Save, Trash2, WandSparkles } from 'lucide-react';
 import { Fragment, useEffect, useMemo, useState } from 'react';
-import { createClipperVideoTask, deleteWebClipHistory, fetchClipperVideoTask, fetchKnowledgeBases, fetchKnowledgeDocument, fetchWebClipHistory, fetchWebClipHistoryItem, previewClipper, submitClipper } from '../../api/client';
+import { deleteWebClipHistory, fetchKnowledgeBases, fetchWebClipHistory, fetchWebClipHistoryItem, previewClipper, submitClipper } from '../../api/client';
 import MarkdownMessage from '../../components/MarkdownMessage';
-import type { ClipperPreview, ClipperResult, ClipperVideoTask, KnowledgeBase, WebClip } from '../../types';
+import type { ClipperPreview, ClipperResult, KnowledgeBase, WebClip } from '../../types';
 import './ClipperPage.css';
-
-type ClipperContentType = 'web' | 'video';
 
 function ClipperPage() {
   const [url, setUrl] = useState('');
-  const [contentType, setContentType] = useState<ClipperContentType>('web');
   const [knowledgeBases, setKnowledgeBases] = useState<KnowledgeBase[]>([]);
   const [knowledgeBaseId, setKnowledgeBaseId] = useState<string>();
   const [mode, setMode] = useState('auto');
   const [useProxy, setUseProxy] = useState(false);
-  const [videoPlatform, setVideoPlatform] = useState('auto');
-  const [videoModelSize, setVideoModelSize] = useState('small');
-  const [videoKeepTimestamps, setVideoKeepTimestamps] = useState(true);
   const [preview, setPreview] = useState<ClipperPreview | null>(null);
   const [title, setTitle] = useState('');
   const [content, setContent] = useState('');
@@ -30,8 +24,6 @@ function ClipperPage() {
   const [selectedClipId, setSelectedClipId] = useState<string | null>(null);
   const [history, setHistory] = useState<WebClip[]>([]);
   const [result, setResult] = useState<ClipperResult | null>(null);
-  const [videoTask, setVideoTask] = useState<ClipperVideoTask | null>(null);
-  const [videoSubmitting, setVideoSubmitting] = useState(false);
   const groupedHistory = useMemo(() => groupWebClipsByTime(history), [history]);
 
   const loadHistory = async () => {
@@ -94,78 +86,6 @@ function ClipperPage() {
     }
   };
 
-  const handleVideoAnalyze = async () => {
-    const nextUrl = url.trim();
-
-    if (!nextUrl) {
-      message.info('请先输入视频链接');
-      return;
-    }
-
-    if (!knowledgeBaseId) {
-      message.info('请先选择一个知识库');
-      return;
-    }
-
-    setVideoSubmitting(true);
-    setResult(null);
-    setPreview(null);
-    setSelectedClipId(null);
-    setTitle('');
-    setContent('');
-
-    try {
-      const task = await createClipperVideoTask({
-        url: nextUrl,
-        knowledgeBaseId,
-        platform: videoPlatform,
-        language: 'zh',
-        modelSize: videoModelSize,
-        keepTimestamps: videoKeepTimestamps,
-      });
-      setVideoTask(task);
-      message.success('视频分析任务已开始');
-      void pollVideoTask(task.id);
-    } catch (error) {
-      message.error(error instanceof Error ? error.message : '视频分析任务创建失败');
-    } finally {
-      setVideoSubmitting(false);
-    }
-  };
-
-  const pollVideoTask = async (taskId: string) => {
-    for (let index = 0; index < 240; index += 1) {
-      await sleep(3000);
-
-      try {
-        const task = await fetchClipperVideoTask(taskId);
-        setVideoTask(task);
-
-        if (task.status === 'completed') {
-          setTitle(task.title ?? '视频转写');
-          if (task.documentId) {
-            const document = await fetchKnowledgeDocument(task.knowledgeBaseId, task.documentId);
-            setContent(document.rawContent);
-          } else {
-            setContent(`视频已保存到知识库。\n\n- 平台：${task.platform}\n- 链接：${task.url}`);
-          }
-          message.success('视频分析完成，已保存到知识库');
-          return;
-        }
-
-        if (task.status === 'failed') {
-          message.error(task.errorMessage || '视频分析失败');
-          return;
-        }
-      } catch (error) {
-        message.error(error instanceof Error ? error.message : '视频分析状态查询失败');
-        return;
-      }
-    }
-
-    message.warning('视频仍在分析中，请稍后刷新任务状态');
-  };
-
   const handleSubmit = async (target: 'clip' | 'knowledge') => {
     if (!url.trim()) {
       message.info('请先输入网页链接');
@@ -210,7 +130,6 @@ function ClipperPage() {
     setTitle('');
     setContent('');
     setResult(null);
-    setVideoTask(null);
     setSelectedClipId(null);
   };
 
@@ -337,36 +256,17 @@ function ClipperPage() {
 
         <div className="clipper-control-panel">
           <div className="search-hero clipper-hero">
-            <Typography.Title level={2}>剪藏</Typography.Title>
-            <Typography.Text type="secondary">把网页或视频链接整理成可检索的知识库内容</Typography.Text>
+            <Typography.Title level={2}>剪藏网页内容</Typography.Title>
+            <Typography.Text type="secondary">抓取正文，预览修正后保存为剪藏</Typography.Text>
           </div>
 
           <Form className="clipper-form" layout="vertical">
-            <Form.Item label="内容类型">
-              <Segmented
-                block
-                value={contentType}
-                onChange={(value) => {
-                  setContentType(value as ClipperContentType);
-                  setPreview(null);
-                  setResult(null);
-                  setVideoTask(null);
-                  setTitle('');
-                  setContent('');
-                }}
-                options={[
-                  { label: '网页', value: 'web', icon: <Globe size={14} /> },
-                  { label: '视频', value: 'video', icon: <Video size={14} /> },
-                ]}
-              />
-            </Form.Item>
-
-            <Form.Item label={contentType === 'video' ? '视频链接' : '网页链接'}>
+            <Form.Item label="网页链接">
               <Input
                 className="clipper-url-input"
                 size="large"
-                prefix={contentType === 'video' ? <Video size={18} /> : <Globe size={18} />}
-                placeholder={contentType === 'video' ? '粘贴抖音、B站或 YouTube 视频链接' : '粘贴网页链接，例如 https://example.com/article'}
+                prefix={<Globe size={18} />}
+                placeholder="粘贴网页链接，例如 https://example.com/article"
                 value={url}
                 onChange={(event) => setUrl(event.target.value)}
               />
@@ -386,71 +286,31 @@ function ClipperPage() {
               />
             </Form.Item>
 
-            {contentType === 'web' ? (
-              <>
-                <Form.Item label="抓取模式">
-                  <Radio.Group className="clipper-mode-group" value={mode} onChange={(event) => setMode(event.target.value)}>
-                    <Radio value="auto">智能正文</Radio>
-                    <Radio value="full">完整页面</Radio>
-                  </Radio.Group>
-                </Form.Item>
+            <Form.Item label="抓取模式">
+              <Radio.Group className="clipper-mode-group" value={mode} onChange={(event) => setMode(event.target.value)}>
+                <Radio value="auto">智能正文</Radio>
+                <Radio value="full">完整页面</Radio>
+              </Radio.Group>
+            </Form.Item>
 
-                <Form.Item>
-                  <Checkbox checked={useProxy} onChange={(event) => setUseProxy(event.target.checked)}>
-                    使用代理抓取
-                  </Checkbox>
-                </Form.Item>
+            <Form.Item>
+              <Checkbox checked={useProxy} onChange={(event) => setUseProxy(event.target.checked)}>
+                使用代理抓取
+              </Checkbox>
+            </Form.Item>
 
-                <Space wrap>
-                  <Button icon={<WandSparkles size={16} />} loading={previewing} onClick={handlePreview}>
-                    抓取预览
-                  </Button>
-                  <Button type="primary" icon={<Save size={16} />} loading={submittingTarget === 'clip'} onClick={() => void handleSubmit('clip')}>
-                    保存剪藏
-                  </Button>
-                  <Button icon={<Save size={16} />} loading={submittingTarget === 'knowledge'} onClick={() => void handleSubmit('knowledge')}>
-                    保存到知识库
-                  </Button>
-                  <Button onClick={handleClear}>清空</Button>
-                </Space>
-              </>
-            ) : (
-              <>
-                <Form.Item label="视频平台">
-                  <Radio.Group className="clipper-mode-group" value={videoPlatform} onChange={(event) => setVideoPlatform(event.target.value)}>
-                    <Radio value="auto">自动识别</Radio>
-                    <Radio value="douyin">抖音</Radio>
-                    <Radio value="bilibili">B站</Radio>
-                    <Radio value="youtube">YouTube</Radio>
-                  </Radio.Group>
-                </Form.Item>
-
-                <Form.Item label="转写模型">
-                  <Select
-                    value={videoModelSize}
-                    onChange={setVideoModelSize}
-                    options={[
-                      { label: 'small（推荐）', value: 'small' },
-                      { label: 'base（更快）', value: 'base' },
-                      { label: 'medium（更准）', value: 'medium' },
-                    ]}
-                  />
-                </Form.Item>
-
-                <Form.Item>
-                  <Checkbox checked={videoKeepTimestamps} onChange={(event) => setVideoKeepTimestamps(event.target.checked)}>
-                    保留带时间戳字幕
-                  </Checkbox>
-                </Form.Item>
-
-                <Space wrap>
-                  <Button type="primary" icon={<WandSparkles size={16} />} loading={videoSubmitting || videoTask?.status === 'processing'} onClick={() => void handleVideoAnalyze()}>
-                    开始分析并入库
-                  </Button>
-                  <Button onClick={handleClear}>清空</Button>
-                </Space>
-              </>
-            )}
+            <Space wrap>
+              <Button icon={<WandSparkles size={16} />} loading={previewing} onClick={handlePreview}>
+                抓取预览
+              </Button>
+              <Button type="primary" icon={<Save size={16} />} loading={submittingTarget === 'clip'} onClick={() => void handleSubmit('clip')}>
+                保存剪藏
+              </Button>
+              <Button icon={<Save size={16} />} loading={submittingTarget === 'knowledge'} onClick={() => void handleSubmit('knowledge')}>
+                保存到知识库
+              </Button>
+              <Button onClick={handleClear}>清空</Button>
+            </Space>
 
             {preview ? (
               <div className="clipper-meta">
@@ -475,19 +335,6 @@ function ClipperPage() {
                 type="success"
                 message={result.target === 'knowledge' ? '网页已保存到知识库' : '剪藏已保存'}
                 description={`${result.target === 'knowledge' ? '文档' : '剪藏'} ${result.id}，标题：${result.title}，状态：${result.status}`}
-              />
-            ) : null}
-
-            {videoTask ? (
-              <Alert
-                showIcon
-                type={videoTask.status === 'failed' ? 'error' : videoTask.status === 'completed' ? 'success' : 'info'}
-                message={videoTaskStatusText(videoTask.status)}
-                description={
-                  videoTask.status === 'failed'
-                    ? videoTask.errorMessage
-                    : `平台：${videoTask.platform}，任务：${videoTask.id}${videoTask.documentId ? `，文档：${videoTask.documentId}` : ''}`
-                }
               />
             ) : null}
           </Form>
@@ -586,28 +433,6 @@ function parseClipDate(updatedAt: string) {
   }
 
   return new Date(updatedAt);
-}
-
-function sleep(milliseconds: number) {
-  return new Promise((resolve) => {
-    window.setTimeout(resolve, milliseconds);
-  });
-}
-
-function videoTaskStatusText(status: ClipperVideoTask['status']) {
-  if (status === 'completed') {
-    return '视频已分析完成并保存到知识库';
-  }
-
-  if (status === 'failed') {
-    return '视频分析失败';
-  }
-
-  if (status === 'processing') {
-    return '视频正在分析中';
-  }
-
-  return '视频分析任务已排队';
 }
 
 export default ClipperPage;

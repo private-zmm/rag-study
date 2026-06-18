@@ -74,24 +74,5 @@ public class DatabaseMigrationService {
                     updated_at timestamp
                 )
                 """);
-        jdbcTemplate.execute("""
-                create table if not exists clipper_video_tasks (
-                    id varchar(255) primary key,
-                    user_id varchar(255) not null,
-                    knowledge_base_id varchar(255) not null,
-                    url text not null,
-                    platform varchar(64) not null,
-                    status varchar(32) not null,
-                    title varchar(255),
-                    document_id varchar(255),
-                    error_message text,
-                    created_at timestamp not null,
-                    updated_at timestamp not null,
-                    started_at timestamp,
-                    finished_at timestamp
-                )
-                """);
-        jdbcTemplate.execute("create index if not exists idx_clipper_video_tasks_user_updated on clipper_video_tasks(user_id, updated_at desc)");
-        jdbcTemplate.execute("create index if not exists idx_clipper_video_tasks_user_status on clipper_video_tasks(user_id, status)");
     }
 }

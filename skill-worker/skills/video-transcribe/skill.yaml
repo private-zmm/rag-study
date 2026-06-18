@@ -1,5 +1,0 @@
-name: video-transcribe
-description: Download an online video, transcribe speech locally, and return Markdown for the knowledge base.
-runtime: python
-entrypoint: run.py
-timeoutSeconds: 1800

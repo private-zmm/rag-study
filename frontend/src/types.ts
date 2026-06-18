@@ -159,21 +159,6 @@ export type ClipperProxyConfig = {
   passwordConfigured: boolean;
 };
 
-export type ClipperVideoTask = {
-  id: string;
-  knowledgeBaseId: string;
-  url: string;
-  platform: string;
-  status: 'pending' | 'processing' | 'completed' | 'failed';
-  title: string | null;
-  documentId: string | null;
-  errorMessage: string | null;
-  createdAt: string;
-  updatedAt: string;
-  startedAt: string | null;
-  finishedAt: string | null;
-};
-
 export type WebClip = {
   id: string;
   knowledgeBaseId: string | null;
